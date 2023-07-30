@@ -178,9 +178,7 @@ def mila_to_dm_board(game):
             area_types[id, 2] = 1
         elif province_id >= 14 and province_id < 33: # sea
             area_types[id,1] = 1
-        elif province_id >=33 and province_id < 72: # coasts of singlecoastals
-            area_types[id, 2] = 1
-        else: # everything else is land
+        else: # all land with 0 or 1 coast
             area_types[id, 0] = 1
 
     # Remaining unchecked areas
