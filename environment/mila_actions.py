@@ -287,3 +287,14 @@ def mila_action_to_action(mila_action: str,
         return mila_actions[1]
     else:
       assert False, 'Unexpected: only Disband/Remove ambiguous in MILA actions.'
+
+# --- MY CODE BELOW ---
+
+_MILA_TO_DM_TAG_MAP = immutabledict.immutabledict({v:k for k, v in _DM_TO_MILA_TAG_MAP.items()})
+
+def mila_to_dm_area(mila_string):
+  """Converts a MILA area tag to the corresponding DM area ID.
+  """
+  province_tag = _MILA_TO_DM_TAG_MAP.get(mila_string, mila_string)
+  area_id = _tag_to_area_id[province_tag]
+  return area_id
