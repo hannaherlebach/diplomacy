@@ -62,20 +62,28 @@ class DiplomacyState(typing_extensions.Protocol):
 # --- MY CODE BELOW --- #
 from diplomacy.welfare-diplomacy.diplomacy.engine.game import Game
 
-# -- HELPER FUNCTIONS --
+class WelfareDiplomacyState(DiplomacyState):
+  
+  def __init__(self, game: Game):
+    self.game = game
 
-# Season
-def mila_to_dm_season(game):
-    """Gets a utils.Season from the game.
-    
-    DeepMind / MILA conversion:
-      ? = NEWYEAR
-      SPRING_MOVES = SPRING MOVEMENT
-      SPRING_RETREATS = SPRING RETREATS
-      AUTUMN_MOVES = FALL MOVEMENT
-      AUTUMN_RETREATS = FALL RETREATS
-      BUILDS = WINTER ADJUSTMENT
-    """
+  def is_terminal(self) -> bool:
+    return self.game.is_game_done
+  
+  def observation(self) -> utils.Observation:
+    """ Gets a utils.Observation namedtuple."""
+
+    game = self.game
+
+    # SEASON: utils.Season
+
+      # DeepMind <-> MILA conversions:
+      # ? = NEWYEAR
+      # SPRING_MOVES = SPRING MOVEMENT
+      # SPRING_RETREATS = SPRING RETREATS
+      # AUTUMN_MOVES = FALL MOVEMENT
+      # AUTUMN_RETREATS = FALL RETREATS
+      # BUILDS = WINTER ADJUSTMENT
 
     # game.phase: string containing long rep of current phase
     if 'SPRING' in game.phase:
@@ -95,24 +103,22 @@ def mila_to_dm_season(game):
     else:
         raise ValueError('not a season')
 
-    return getattr(utils.Season, season + '_' + type)
+    season = getattr(utils.Season, season + '_' + type)
+    
 
-# Board
-def mila_to_dm_board(game):
-    """Returns an array of shape 81 x 35 capturing the board state,
-    as required by the observation format in utils.Observation.
 
-    Future improvements:
-    - Replace values with variable names
-    """
-
+     
+    # BOARD STATE & BUILD NUMBERS
+      # Board: np.array shape (81, 35)
+      # Build numbers: np.array shape (7,)
     power_names_sorted = game.powers.keys().sorted()
     powers = [game.powers[name] for name in power_names_sorted]
 
     supply_centers = game.map.scs # tags
     supply_centers_owned = set()
 
-    provinces_with_units = ()
+    # Initialise build numbers
+    build_numbers = np.zeros((7,1), dtype=np.uint8)
 
     # Initialise matrix components
     unit_types = np.zeros((81,3), dtype=np.uint8)
@@ -169,9 +175,8 @@ def mila_to_dm_board(game):
             # Removable: if power has more units than centers, then this unit is removable
             if build_count < 0:
                 removables[id] = 1
-
-            provinces_with_units.add(mila_tag[:3]) # doesn't include bicoastal division
-
+                
+        buildable_homes = set()
 
         for sc in power.centers: # mainland only
             id = mila_actions.mila_to_dm_area(sc)
@@ -182,9 +187,26 @@ def mila_to_dm_board(game):
             # Buildable: if power controls its home province, there's not a unit in it, and power has more SCs than units, then this area is buildable (since the power controls its home supply center, and building only happens in winter, there cannot be a different power's unit in it at build time)
             if sc in power.homes and sc not in self_occupied_homes and build_count > 0:
                buildables[id] = 1
+               buildable_homes.add(sc)
 
             supply_centers_owned.add(sc)
 
+        # Set build numbers if build season
+        if season == 'BUILD':
+            if build_count < 0:
+                build_numbers[power_ix] = build_count
+            else:
+                build_numbers[power_ix] = min(build_count, len(buildable_homes))
+    
+    # Store build numbers if build season
+    if season == 'BUILD':          
+      self._build_numbers = build_numbers
+    # Otherwise access numbers from last build season with positives zeroed out, if not first year
+    elif self._build_numbers is not None:
+        mask = self._build_numbers < 0
+        build_numbers = self._build_numbers * mask
+
+    
     # Unoccupied supply centres
     supply_centers_unowned = [sc for sc in supply_centers if sc not in supply_centers_owned]
     for sc in supply_centers_unowned:
@@ -201,19 +223,11 @@ def mila_to_dm_board(game):
         else: # all land with 0 or 1 coast
             area_types[id, 0] = 1
 
-    return np.concatenate(
+    board = np.concatenate(
         (unit_types, unit_owners, buildables, removables, dislodgeds, dislodged_owners, area_types, sc_owners),
         dim=1)
 
+    
 
-# -- DIPLOMACY STATE IMPLEMENTATION --
 
-class WelfareDiplomacyState(DiplomacyState):
-  
-  def __init__(self, game: Game):
-    self.game = game
-
-  def is_terminal(self) -> bool:
-    return self.game.is_game_done
-  
-  def observation(self) -> utils.Observation:
+    return utils.Observation(season, board, build_numbers, last_actions)
