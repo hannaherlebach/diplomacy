@@ -57,3 +57,14 @@ class DiplomacyState(typing_extensions.Protocol):
         corresponding player's unit-actions for that phase.
     """
     pass
+
+# --- MY CODE BELOW ---
+from diplomacy.welfare-diplomacy.diplomacy.engine.game import Game
+
+class WelfareDiplomacyState(DiplomacyState):
+  
+  def __init__(self, game: Game):
+    self.game = game
+
+  def is_terminal(self) -> bool:
+    return self.game.is_game_done
