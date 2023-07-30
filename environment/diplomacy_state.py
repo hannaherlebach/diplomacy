@@ -202,7 +202,7 @@ class WelfareDiplomacyState(DiplomacyState):
     if season == 'BUILD':          
       self._build_numbers = build_numbers
     # Otherwise access numbers from last build season with positives zeroed out, if not first year
-    elif self._build_numbers is not None:
+    elif self._build_numbers:
         mask = self._build_numbers < 0
         build_numbers = self._build_numbers * mask
 
@@ -227,7 +227,18 @@ class WelfareDiplomacyState(DiplomacyState):
         (unit_types, unit_owners, buildables, removables, dislodgeds, dislodged_owners, area_types, sc_owners),
         dim=1)
 
-    
-
+    # LAST ACTIONS
+      # Using the step method
+    if self._last_actions:
+      last_actions = [action for power in self._last_actions for action in power]
+    else:
+      last_actions = None
 
     return utils.Observation(season, board, build_numbers, last_actions)
+  
+  def step(self, actions_per_player: Sequence[Sequence[int]]) -> None:
+     
+     # Store actions for next observation
+     self._last_actions = actions_per_player
+
+     pass
