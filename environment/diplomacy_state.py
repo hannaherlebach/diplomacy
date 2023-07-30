@@ -104,12 +104,15 @@ def mila_to_dm_board(game):
 
     Future improvements:
     - Replace values with variable names
-    - Can be streamlined
     """
 
     power_names_sorted = game.powers.keys().sorted()
-    powers = list(map(game.power.get, power_names_sorted))
-    areas_checked = set()
+    powers = [game.powers[name] for name in power_names_sorted]
+
+    supply_centers = game.map.scs # tags
+    supply_centers_owned = set()
+
+    provinces_with_units = ()
 
     # Initialise matrix components
     unit_types = np.zeros((81,3), dtype=np.uint8)
@@ -121,13 +124,17 @@ def mila_to_dm_board(game):
     area_types = np.zeros((81,3), dtype=np.uint8)
     sc_owners = np.zeros((81,8), dtype=np.uint8)
 
+    # Set default to no unit
+    unit_types[:, -1] = 1
+    unit_owners[:, -1] = 1
+    dislodgeds[:, -1] = 1
+    dislodged_owners[:, -1] = 1
+
     # Areas containing units and owned supply centres
     for power_ix, power in enumerate(powers):
 
         build_count = len(power.centers) - len(power.units)
-
-        # Set buildable homes to all homes, later remove homes containing units
-        buildable_homes = power.homes
+        self_occupied_homes = set() # for finding buildable homes
 
         for unit in power.units:
             
@@ -136,6 +143,7 @@ def mila_to_dm_board(game):
             unit = unit[1:] if is_dislodged else unit
             unit_type = unit[0]
             mila_tag = unit[2:]
+            province = mila_tag[:3]
             id = mila_actions.mila_to_dm_area(mila_tag)
 
             # Fill in unit & owner info for area
@@ -144,34 +152,46 @@ def mila_to_dm_board(game):
             if not is_dislodged:
                 unit_types[id, unit_type_ix] = 1
                 unit_owners[id, power_ix] = 1
+                # Set 'no unit' to 0
+                unit_types[id, -1] = 0
+                unit_owners[id, -1] = 0
             else:
                 dislodgeds[id, unit_type_ix] = 1
                 dislodged_owners[id, power_ix] = 1
+                # Set 'no dislodged unit' to 0
+                dislodgeds[id, -1] = 0
+                dislodged_owners[id, -1] = 0
 
-            # If the unit is in a home SC, remove area from buildable homes
-            if mila_tag[:3] in buildable_homes:
-                buildable_homes.remove(mila_tag)
+            # Check if unit occupies one of power's homes
+            if province in power.homes:
+                self_occupied_homes.add(province)
 
-            # If more units than centers, this unit is removable
+            # Removable: if power has more units than centers, then this unit is removable
             if build_count < 0:
                 removables[id] = 1
 
-            areas_checked.add(id)
+            provinces_with_units.add(mila_tag[:3]) # doesn't include bicoastal division
 
-        for sc in power.centers:
-            mila_tag = sc
-            id = mila_actions.mila_to_dm_area(mila_tag)
 
-            # Fill in supply center info for that area
+        for sc in power.centers: # mainland only
+            id = mila_actions.mila_to_dm_area(sc)
+
+            # Supply center owner
             sc_owners[id, power_ix] = 1
 
-            # If Power controls its home SC, there's not a unit in it, and it has more SCs than units, then buildable
-            if sc in buildable_homes and build_count > 0:
-                buildables[id] = 1
-            
-            areas_checked.add(id)
+            # Buildable: if power controls its home province, there's not a unit in it, and power has more SCs than units, then this area is buildable (since the power controls its home supply center, and building only happens in winter, there cannot be a different power's unit in it at build time)
+            if sc in power.homes and sc not in self_occupied_homes and build_count > 0:
+               buildables[id] = 1
 
-    # Fill out area type, from area id
+            supply_centers_owned.add(sc)
+
+    # Unoccupied supply centres
+    supply_centers_unowned = [sc for sc in supply_centers if sc not in supply_centers_owned]
+    for sc in supply_centers_unowned:
+       id = mila_actions.mila_to_dm_area(sc)
+       sc_owners[id, -1] = 1
+
+    # Area type: fill out from area id
     for id in range(81):
         province_id, area_ix = utils.province_id_and_area_index(id)
         if area_ix==1 or area_ix==2: # coasts of bicoastals
@@ -180,12 +200,6 @@ def mila_to_dm_board(game):
             area_types[id,1] = 1
         else: # all land with 0 or 1 coast
             area_types[id, 0] = 1
-
-    # Remaining unchecked areas
-    empty_areas = [id for id in range(81) if id not in areas_checked]
-
-    for v in [unit_types, unit_owners, dislodgeds, dislodged_owners, sc_owners]:
-        v[empty_areas, -1] = 1
 
     return np.concatenate(
         (unit_types, unit_owners, buildables, removables, dislodgeds, dislodged_owners, area_types, sc_owners),
