@@ -238,6 +238,16 @@ class WelfareDiplomacyState(DiplomacyState):
 
     return utils.Observation(season, board, build_numbers, last_actions)
   
+  def returns(self) -> np.ndarray:
+     """The returns of the game. All 0s if the game is in progress."""
+
+     # (Not sure if this should be cumulative, or only at end of game)
+     if self.game.get_current_phase() == 'COMPLETED':
+        welfare_points = [power.welfare_points for power in self.game.powers]
+        return np.array(welfare_points)
+     else:
+        return np.zeros(7) # dtype?
+  
   def step(self, actions_per_player: Sequence[Sequence[int]]) -> None:
      
      game = self.game
