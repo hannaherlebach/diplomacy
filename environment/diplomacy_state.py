@@ -84,6 +84,8 @@ class WelfareDiplomacyState(DiplomacyState):
       # AUTUMN_MOVES = FALL MOVEMENT
       # AUTUMN_RETREATS = FALL RETREATS
       # BUILDS = WINTER ADJUSTMENT
+    
+    # To do: figure out the NEWYEAR phase
 
     # game.phase: string containing long rep of current phase
     if 'SPRING' in game.phase:
@@ -238,7 +240,38 @@ class WelfareDiplomacyState(DiplomacyState):
   
   def step(self, actions_per_player: Sequence[Sequence[int]]) -> None:
      
+     game = self.game
+     power_names_sorted = game.powers.keys().sorted()
+
+     # Convert actions to MILA orders; orders will be lists
+     orders = [mila_actions.action_to_mila_actions(act) 
+               for player in actions_per_player 
+               for act in player]
+     
+     orders_reduced = [[],[],[],[],[],[],[],]
+
+     # Reduces lists of possible orders to a single order
+     for player_ix, orders_per_player in enumerate(orders):
+        for order in orders_per_player:
+           # order is a list of possible orders
+           if len(order) > 1:
+              # Get legal one from list of possible actions - uses self.legal_actions
+              for possible_order in order:
+                 if possible_order in self.legal_actions[player_ix, :]:
+                    orders_reduced[player_ix].append(possible_order)
+                    break
+           else:
+              # Get string from single-item list
+              orders_reduced[player_ix].append(order[0])
+
+     orders = orders_reduced
+
+     # Set orders for each power
+     for power_ix, power_name in enumerate(power_names_sorted):
+        game.set_orders(power_name, orders[power_ix], expand=False)
+
+     # Step forward the environment
+     game.process()
+
      # Store actions for next observation
      self._last_actions = actions_per_player
-
-     pass
