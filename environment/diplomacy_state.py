@@ -236,7 +236,64 @@ class WelfareDiplomacyState(DiplomacyState):
         return utils.Observation(season, board, build_numbers, last_actions)
     
     def legal_actions(self) -> Sequence[Sequence[int]]:
+        game = self.game
+        powers = self.powers
 
+        # Get possible orders from MILA
+        orders_by_power = {power: [] for power in powers.values()}
+
+        build_sites = {power: game._build_sites(power) if game.phase_type == "A" else []
+                             for power in powers.values()}
+        build_sites_by_loc = {site: power for power, sites in build_sites.items() for site in sites}
+
+        for loc, possible_orders in self.game.get_all_possible_orders().items():
+            
+            # If BUILD phase and loc is a build site for power, then all orders in that loc belong to that power
+            if game.phase_type == "A" and loc in build_sites_by_loc.keys():
+                power = build_sites_by_loc[loc]
+                orders_by_power[power].append(possible_orders)
+
+            # Otherwise, the possible_orders refer to a unit in loc. Check who owns the unit
+            else:
+                unit = game._occupant(loc)
+                if unit:
+                    unit_owner = game._unit_owner(unit) # returns power instance
+                    orders_by_power[unit_owner].append(possible_orders)
+
+
+        # I think these actions are all the legal (i.e., possible given the board state) actions; if not, may want to run commented out code instead of the code below
+
+        # # Check if legal!
+        # legal_actions_by_power = {power: [] for power in powers.values()}
+        # season = self.observation().season
+
+        # for power in powers.values():
+        #     for orders in orders_by_power[power]:
+        #         for order in orders:
+        #            # Split order into unit and order on unit
+        #             unit = order.split()[:2]
+        #           unit_order = order.split()[2:]
+        #             is_valid = game._valid_order(power, unit, unit_order)
+
+        #           if is_valid in {-1, 1}:
+        #                 # Convert MILA order to DM action
+        #               action = mila_actions.mila_action_to_action(order, season)
+        #               legal_actions_by_power[power].append(action)        
+
+        season = self.observation().season
+        legal_actions_by_power = {power: [] for power in powers.values()}
+
+        # Convert MILA orders to DM actions
+        for power in powers.values():
+            for orders in orders_by_power[power]:
+                for order in orders:
+                    action = mila_actions.mila_action_to_action(order, season)
+                    legal_actions_by_power[power].append(action)
+
+        legal_actions = [legal_actions_by_power[power] for power in legal_actions_by_power]
+            
+        return legal_actions
+    
     
     def returns(self) -> np.ndarray:
         """The returns of the game. All 0s if the game is in progress."""
