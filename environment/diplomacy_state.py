@@ -145,7 +145,6 @@ class WelfareDiplomacyState(DiplomacyState):
         for power_ix, (power_name, power) in enumerate(powers.items()):
 
             build_count = len(power.centers) - len(power.units)
-            self_occupied_homes = set() # for finding buildable homes
 
             for unit in game.get_units(power_name): # contains dislodgement info (*), unlike power.units
                 
@@ -173,15 +172,10 @@ class WelfareDiplomacyState(DiplomacyState):
                     dislodgeds[id, -1] = 0
                     dislodged_owners[id, -1] = 0
 
-                # Check if unit occupies one of power's homes
-                if province in power.homes:
-                    self_occupied_homes.add(province)
-
                 # Removable: if power has more units than centers, then this unit is removable
                 if build_count < 0:
                     removables[id] = 1
                     
-            buildable_homes = set()
 
             for sc in power.centers: # mainland only
                 id = mila_actions.mila_to_dm_area(sc)
@@ -189,19 +183,19 @@ class WelfareDiplomacyState(DiplomacyState):
                 # Supply center owner
                 sc_owners[id, power_ix] = 1
 
-                # Buildable: if power controls its home province, there's not a unit in it, and power has more SCs than units, then this area is buildable (since the power controls its home supply center, and building only happens in winter, there cannot be a different power's unit in it at build time)
-                if sc in power.homes and sc not in self_occupied_homes and build_count > 0:
+                # Buildable
+                if sc in game._build_sites(power) and build_count > 0:
                     buildables[id] = 1
-                    buildable_homes.add(sc)
 
-                    supply_centers_owned.add(sc)
+                supply_centers_owned.add(sc)
 
             # Set build numbers if build season
             if season == 'BUILD':
                 if build_count < 0:
                     build_numbers[power_ix] = build_count
                 else:
-                    build_numbers[power_ix] = min(build_count, len(buildable_homes))
+                    # game._build_limit(power) gives the number of unoccupied home supply centers
+                    build_numbers[power_ix] = min(build_count, game._build_limit(power))
         
         # Store build numbers if build season
         if season == 'BUILD':          
@@ -243,7 +237,6 @@ class WelfareDiplomacyState(DiplomacyState):
     
     def legal_actions(self) -> Sequence[Sequence[int]]:
 
-        pass
     
     def returns(self) -> np.ndarray:
         """The returns of the game. All 0s if the game is in progress."""
