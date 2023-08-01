@@ -16,7 +16,7 @@ from diplomacy.network import network_policy
 from diplomacy.network import parameter_provider
 
 from diplomacy.tests.observation_test import ObservationTest
-from diplomacy.welfare-diplomacy.diplomacy.engine.game import Game
+from diplomacy.welfare_diplomacy.diplomacy.engine.game import Game
 
 SL = True
 file_path = 'diplomacy/parameters'
@@ -46,7 +46,7 @@ def WelfareObservationTest(ObservationTest):
             observations = dill.load(f)
         return observations
     
-    def get_reference_observations(self) -> Sequence[collections.OrderedDict]:
+    def get_reference_legal_actions(self) -> Sequence[np.ndarray]:
         with open(file_path + 'legal_actions.npz', 'rb') as f:
             legal_actions = dill.load(f)
         return legal_actions
@@ -57,9 +57,10 @@ def WelfareObservationTest(ObservationTest):
         return step_outputs
   
     def get_actions_outputs(self) -> Sequence[collections.OrderedDict]:
-      with open(file_path + 'actions_outputs.npz', 'rb') as f:
-        actions_outputs = dill.load(f)
-      return actions_outputs
+        with open(file_path + 'actions_outputs.npz', 'rb') as f:
+            actions_outputs = dill.load(f)
+        return actions_outputs
+    
 
 if __name__ == '__main__':
   absltest.main()
