@@ -61,7 +61,7 @@ class DiplomacyState(typing_extensions.Protocol):
     pass
 
 # --- MY CODE BELOW --- #
-from diplomacy.welfare-diplomacy.diplomacy.engine.game import Game
+from diplomacy.welfare_diplomacy.diplomacy.engine.game import Game
 
 class WelfareDiplomacyState(DiplomacyState):
   

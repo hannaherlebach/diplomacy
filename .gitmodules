@@ -1,0 +1,3 @@
+[submodule "welfare_diplomacy"]
+	path = welfare_diplomacy
+	url = https://github.com/mukobi/welfare-diplomacy.git
