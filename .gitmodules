@@ -1,1 +1,4 @@
 
+[submodule "welfare-diplomacy"]
+	path = welfare-diplomacy
+	url = https://github.com/hannaherlebach/welfare-diplomacy.git

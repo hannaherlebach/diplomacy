@@ -6,8 +6,8 @@ dm-env==1.5
 dm-haiku==0.0.4
 dm-tree==0.1.6
 flatbuffers==2.0
-jax==0.2.19
-jaxlib==0.1.70
+jax>=0.2.19
+jaxlib>=0.1.70
 ml-collections==0.1.0
 numpy==1.21.2
 opt-einsum==3.3.0

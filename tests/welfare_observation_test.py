@@ -16,6 +16,7 @@ from diplomacy.network import network_policy
 from diplomacy.network import parameter_provider
 
 from diplomacy.tests.observation_test import ObservationTest
+
 from diplomacy.welfare_diplomacy.diplomacy.engine.game import Game
 
 SL = True
