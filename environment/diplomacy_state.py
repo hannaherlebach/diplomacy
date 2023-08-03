@@ -62,7 +62,7 @@ class DiplomacyState(typing_extensions.Protocol):
 
 # --- MY CODE BELOW --- #
 
-from welfare_diplomacy.diplomacy.engine.game import Game
+from welfare_diplomacy.engine.game import Game
 
 class WelfareDiplomacyState(DiplomacyState):
   
@@ -71,7 +71,7 @@ class WelfareDiplomacyState(DiplomacyState):
 
         # Get a sorted list of power tuples of form 'power name: power instance'
         # game.powers is a dict of form {'FRANCE': FrancePower, ...}
-        power_names_sorted = game.powers.keys().sorted()
+        power_names_sorted = sorted(game.powers.keys())
         self.powers = OrderedDict((name, game.powers[name]) for name in power_names_sorted)
 
         self._build_numbers = None
@@ -229,11 +229,11 @@ class WelfareDiplomacyState(DiplomacyState):
 
         board = np.concatenate(
             (unit_types, unit_owners, buildables, removables, dislodgeds, dislodged_owners, area_types, sc_owners),
-            dim=1)
+            axis=1)
 
         # LAST ACTIONS
         # Using the step method
-        if self._last_actions:
+        if self._last_actions is not None:
             last_actions = [action for power in self._last_actions for action in power]
         else:
             last_actions = None
@@ -314,6 +314,8 @@ class WelfareDiplomacyState(DiplomacyState):
         
         game = self.game
         powers = self.powers
+        # Store actions for next observation
+        self._last_actions = actions_per_player
 
         # Convert actions to MILA orders; orders will be lists
         orders = [[mila_actions.action_to_mila_actions(act) for act in player] for player in actions_per_player]
@@ -342,6 +344,3 @@ class WelfareDiplomacyState(DiplomacyState):
 
         # Step forward the environment
         game.process()
-
-        # Store actions for next observation
-        self._last_actions = actions_per_player

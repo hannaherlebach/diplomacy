@@ -17,7 +17,7 @@ from diplomacy.network import parameter_provider
 
 from diplomacy.tests import observation_test
 
-from welfare_diplomacy.diplomacy.engine.game import Game
+from welfare_diplomacy.engine.game import Game
 
 SL = True
 file_path = '/Users/hannaherlebach/research/diplomacy_parameters/'
