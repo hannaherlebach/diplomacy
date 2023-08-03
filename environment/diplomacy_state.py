@@ -62,7 +62,7 @@ class DiplomacyState(typing_extensions.Protocol):
 
 # --- MY CODE BELOW --- #
 
-from diplomacy.welfare_diplomacy.diplomacy.engine.game import Game
+from welfare_diplomacy.diplomacy.engine.game import Game
 
 class WelfareDiplomacyState(DiplomacyState):
   
@@ -74,6 +74,9 @@ class WelfareDiplomacyState(DiplomacyState):
         power_names_sorted = game.powers.keys().sorted()
         self.powers = OrderedDict((name, game.powers[name]) for name in power_names_sorted)
 
+        self._build_numbers = None
+        self._last_actions = None
+
     def is_terminal(self) -> bool:
         return self.game.is_game_done
     
@@ -82,6 +85,7 @@ class WelfareDiplomacyState(DiplomacyState):
 
         game = self.game
         powers = self.powers
+        
 
         # SEASON: utils.Season
 
@@ -239,7 +243,7 @@ class WelfareDiplomacyState(DiplomacyState):
     def legal_actions(self) -> Sequence[Sequence[int]]:
         game = self.game
         powers = self.powers
-
+        
         # Get possible orders from MILA
         orders_by_power = {power: [] for power in powers.values()}
 
@@ -312,10 +316,8 @@ class WelfareDiplomacyState(DiplomacyState):
         powers = self.powers
 
         # Convert actions to MILA orders; orders will be lists
-        orders = [mila_actions.action_to_mila_actions(act) 
-                for player in actions_per_player 
-                for act in player]
-        
+        orders = [[mila_actions.action_to_mila_actions(act) for act in player] for player in actions_per_player]
+
         orders_reduced = [[],[],[],[],[],[],[],]
 
         # Reduces lists of possible orders to a single order

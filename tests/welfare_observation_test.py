@@ -15,9 +15,9 @@ from diplomacy.network import config
 from diplomacy.network import network_policy
 from diplomacy.network import parameter_provider
 
-from diplomacy.tests.observation_test import ObservationTest
+from diplomacy.tests import observation_test
 
-from diplomacy.welfare_diplomacy.diplomacy.engine.game import Game
+from welfare_diplomacy.diplomacy.engine.game import Game
 
 SL = True
 file_path = 'diplomacy/parameters'
@@ -25,9 +25,7 @@ file_path = 'diplomacy/parameters'
 # Create game instance
 game = Game()
 
-def WelfareObservationTest(ObservationTest):
-    def __init__(self):
-        pass
+def WelfareObservationTest(observation_test.ObservationTest):
 
     def get_diplomacy_state(self) -> diplomacy_state.DiplomacyState:
         state = diplomacy_state.WelfareDiplomacyState(game)
