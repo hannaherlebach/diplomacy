@@ -162,6 +162,8 @@ def action_to_mila_actions(
     Action in the MILA notation.
   """
   order, p1, p2, p3 = action_utils.action_breakdown(action)
+  # order: an integer between 0 and 13
+  # p1, p2, p3: tuples of (province_id, coast indicator bit)
 
   mila_action_strings = set()
 
@@ -173,15 +175,26 @@ def action_to_mila_actions(
   # be a bicoastal province, so we only ever need to change a single province
   # flag.
   possible_orders_incl_flags = [(order, p1, p2, p3)]
+
+  # If not build:
   if order not in {action_utils.BUILD_ARMY, action_utils.BUILD_FLEET}:
+    # If unit acting is in bicostal province, add order with other flag? Is 0 by default
     if utils.province_type_from_id(p1[0]) == utils.ProvinceType.BICOASTAL:
       possible_orders_incl_flags.append((order, (p1[0], 1), p2, p3))
+
+  # If unit is supporting a hold:
   if order == action_utils.SUPPORT_HOLD:
     if utils.province_type_from_id(p2[0]) == utils.ProvinceType.BICOASTAL:
       possible_orders_incl_flags.append((order, p1, (p2[0], 1), p3))
+
+  # If unit is supporting a move:
   if order == action_utils.SUPPORT_MOVE_TO:
+    # If supported unit is in a bicoastal province, it could be on the other coast:
     if utils.province_type_from_id(p3[0]) == utils.ProvinceType.BICOASTAL:
       possible_orders_incl_flags.append((order, p1, p2, (p3[0], 1)))
+    # If destination is bicoastal province, add other coast:
+    if utils.province_type_from_id(p2[0]) == utils.ProvinceType.BICOASTAL:
+      possible_orders_incl_flags.append((order, p1, (p2[0], 1), p3))
 
   for order, p1, p2, p3 in possible_orders_incl_flags:
     if order == action_utils.HOLD:
@@ -212,12 +225,19 @@ def action_to_mila_actions(
           )
     elif order == action_utils.SUPPORT_MOVE_TO:
       for acting_unit_type in possible_unit_types_support(p1, p2):
-        # The area flag is not specified in the destination of a support, so we
-        # should test if p3 -> p2 is possible for any area of p2, not just the
-        # area index given by the action
-        for supported_unit_type in possible_unit_types_support(p3, p2):
-          # Don't specify destination coast in a support move
+
+        # My own code - theirs was wrong
+
+        for supported_unit_type in possible_unit_types_movement(p3, p2):
+          # I think you do specify destination coast! This overcoms one bug
           mila_action_strings.add(
+              f'{mila_unit_string(acting_unit_type, p1)} S '
+              f'{mila_unit_string(supported_unit_type, p3)} - '
+              f'{mila_area_string(supported_unit_type, p2)}'
+          )
+          
+          if supported_unit_type != utils.UnitType.ARMY:
+            mila_action_strings.add(
               f'{mila_unit_string(acting_unit_type, p1)} S '
               f'{mila_unit_string(supported_unit_type, p3)} - '
               f'{mila_area_string(utils.UnitType.ARMY, p2)}'
