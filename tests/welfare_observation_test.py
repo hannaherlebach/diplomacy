@@ -15,7 +15,7 @@ from diplomacy.network import config
 from diplomacy.network import network_policy
 from diplomacy.network import parameter_provider
 
-from diplomacy.tests import observation_test
+import diplomacy.tests.observation_test as observation_test
 
 from welfare_diplomacy.engine.game import Game
 
@@ -62,4 +62,4 @@ class WelfareObservationTest(observation_test.ObservationTest):
     
 
 if __name__ == '__main__':
-  absltest.main()
+    absltest.main()

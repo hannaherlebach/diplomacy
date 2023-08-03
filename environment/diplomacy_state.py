@@ -85,7 +85,6 @@ class WelfareDiplomacyState(DiplomacyState):
 
         game = self.game
         powers = self.powers
-        
 
         # SEASON: utils.Season
 
@@ -105,19 +104,22 @@ class WelfareDiplomacyState(DiplomacyState):
         elif 'FALL' in game.phase:
             season = 'AUTUMN'
         elif 'WINTER' in game.phase:
-            return getattr(utils.Season, 'BUILD')
+            season = 'BUILDS'
         else:
             raise ValueError('not a season')
 
         # game.phase_type: 'M' for Movement, 'R' for Retreats, 'A' for Adjustment, '-' for non-playing
         if 'M' in game.phase_type:
+            season = getattr(utils.Season, season + '_MOVES')
             type = 'MOVES'
         elif 'R' in game.phase_type:
+            season = getattr(utils.Season, season + '_RETREATS')
             type = 'RETREATS'
+        elif 'A' in game.phase_type:
+            season = getattr(utils.Season, season)
         else:
             raise ValueError('not a season')
-
-        season = getattr(utils.Season, season + '_' + type)
+        # (could make this cleaner)
         
         
         # BOARD STATE & BUILD NUMBERS
@@ -233,7 +235,7 @@ class WelfareDiplomacyState(DiplomacyState):
 
         # LAST ACTIONS
         # Using the step method
-        if self._last_actions is not None:
+        if self._last_actions:
             last_actions = [action for power in self._last_actions for action in power]
         else:
             last_actions = None
@@ -243,7 +245,7 @@ class WelfareDiplomacyState(DiplomacyState):
     def legal_actions(self) -> Sequence[Sequence[int]]:
         game = self.game
         powers = self.powers
-        
+
         # Get possible orders from MILA
         orders_by_power = {power: [] for power in powers.values()}
 
@@ -251,7 +253,7 @@ class WelfareDiplomacyState(DiplomacyState):
                              for power in powers.values()}
         build_sites_by_loc = {site: power for power, sites in build_sites.items() for site in sites}
 
-        for loc, possible_orders in self.game.get_all_possible_orders().items():
+        for loc, possible_orders in game.get_all_possible_orders().items():
             
             # If BUILD phase and loc is a build site for power, then all orders in that loc belong to that power
             if game.phase_type == "A" and loc in build_sites_by_loc.keys():
@@ -311,15 +313,15 @@ class WelfareDiplomacyState(DiplomacyState):
             return np.zeros(7) # dtype?
     
     def step(self, actions_per_player: Sequence[Sequence[int]]) -> None:
+        # actions_per_player are given as 64-bit integers
         
         game = self.game
         powers = self.powers
-        # Store actions for next observation
-        self._last_actions = actions_per_player
+        legal_actions = self.legal_actions()
 
-        # Convert actions to MILA orders; orders will be lists
+        # Convert actions to MILA orders; orders will be lists, mostly with one item but some with multiple
         orders = [[mila_actions.action_to_mila_actions(act) for act in player] for player in actions_per_player]
-
+        
         orders_reduced = [[],[],[],[],[],[],[],]
 
         # Reduces lists of possible orders to a single order
@@ -329,7 +331,7 @@ class WelfareDiplomacyState(DiplomacyState):
                 if len(order) > 1:
                     # Get legal one from list of possible actions - uses self.legal_actions
                     for possible_order in order:
-                        if possible_order in self.legal_actions[player_ix, :]:
+                        if possible_order in legal_actions[player_ix]:
                             orders_reduced[player_ix].append(possible_order)
                             break
                 else:
@@ -344,3 +346,6 @@ class WelfareDiplomacyState(DiplomacyState):
 
         # Step forward the environment
         game.process()
+
+        # Store actions for next observation
+        self._last_actions = actions_per_player
