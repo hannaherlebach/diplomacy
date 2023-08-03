@@ -25,7 +25,7 @@ file_path = 'diplomacy/parameters'
 # Create game instance
 game = Game()
 
-def WelfareObservationTest(observation_test.ObservationTest):
+class WelfareObservationTest(observation_test.ObservationTest):
 
     def get_diplomacy_state(self) -> diplomacy_state.DiplomacyState:
         state = diplomacy_state.WelfareDiplomacyState(game)
