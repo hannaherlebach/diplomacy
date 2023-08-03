@@ -20,7 +20,7 @@ from diplomacy.tests import observation_test
 from welfare_diplomacy.diplomacy.engine.game import Game
 
 SL = True
-file_path = 'diplomacy/parameters'
+file_path = '/Users/hannaherlebach/research/diplomacy_parameters/'
 
 # Create game instance
 game = Game()
