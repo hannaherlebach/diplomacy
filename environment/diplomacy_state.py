@@ -130,7 +130,7 @@ class WelfareDiplomacyState(DiplomacyState):
         supply_centers_owned = set()
 
         # Initialise build numbers
-        build_numbers = np.zeros((7,1), dtype=np.uint8)
+        build_numbers = [0, 0, 0, 0, 0, 0, 0]
 
         # Initialise matrix components
         unit_types = np.zeros((81,3), dtype=np.uint8)
@@ -153,7 +153,7 @@ class WelfareDiplomacyState(DiplomacyState):
 
             build_count = len(power.centers) - len(power.units)
 
-            for unit in game.get_units(power_name): # contains dislodgement info (*), unlike power.units
+            for unit in game.get_units(power_name): # contains dislodgement info (*), unlike power.units (returns power.units[:] + [<dislodged units>])
                 
                 is_dislodged = bool(unit[0]=="*")
 
@@ -162,9 +162,23 @@ class WelfareDiplomacyState(DiplomacyState):
                 mila_tag = unit[2:]
                 province = mila_tag[:3]
                 id = mila_actions.mila_to_dm_area(mila_tag)
+                province_id, area_ix = utils.province_id_and_area_index(id)
+                province_type = utils.province_type_from_id(province_id)
+
+                if area_ix > 0:
+                    bicoastal_main_id = utils.area_from_province_id_and_area_index(province_id, 0)
+                else:
+                    bicoastal_main_id = None
+                
 
                 # Fill in unit & owner info for area
                 unit_type_ix = 0 if unit_type=='A' else 1
+
+                # If unit in coast of bicoastal, also add unit flag for main area
+                if area_ix > 0:
+                    id = [id, bicoastal_main_id]
+
+                # NOTE: MAY ALSO NEED TO DO THIS FOR THE OTHER COAST SOMETIMES
 
                 if not is_dislodged:
                     unit_types[id, unit_type_ix] = 1
@@ -172,12 +186,15 @@ class WelfareDiplomacyState(DiplomacyState):
                     # Set 'no unit' to 0
                     unit_types[id, -1] = 0
                     unit_owners[id, -1] = 0
+                        
+
                 else:
                     dislodgeds[id, unit_type_ix] = 1
                     dislodged_owners[id, power_ix] = 1
                     # Set 'no dislodged unit' to 0
                     dislodgeds[id, -1] = 0
                     dislodged_owners[id, -1] = 0
+
 
                 # Removable: if power has more units than centers, then this unit is removable
                 if build_count < 0:
@@ -186,9 +203,16 @@ class WelfareDiplomacyState(DiplomacyState):
 
             for sc in power.centers: # mainland only
                 id = mila_actions.mila_to_dm_area(sc)
+                province_id, area_ix = utils.province_id_and_area_index(id)
+                province_type = utils.province_type_from_id(province_id)
+
+                if province_type == utils.ProvinceType.BICOASTAL:
+                    sc_ids = [utils.area_from_province_id_and_area_index(province_id, ix) for ix in [0,1,2]]
+                else:
+                    sc_ids = id
 
                 # Supply center owner
-                sc_owners[id, power_ix] = 1
+                sc_owners[sc_ids, power_ix] = 1
 
                 # Buildable
                 if sc in game._build_sites(power) and build_count > 0:
@@ -217,7 +241,11 @@ class WelfareDiplomacyState(DiplomacyState):
         supply_centers_unowned = [sc for sc in supply_centers if sc not in supply_centers_owned]
         for sc in supply_centers_unowned:
             id = mila_actions.mila_to_dm_area(sc)
-            sc_owners[id, -1] = 1
+            province_id, area_ix = utils.province_id_and_area_index(id)
+            if utils.province_type_from_id(province_id) == utils.ProvinceType.BICOASTAL:
+                sc_owners[id:id+3, -1] = 1
+            else:
+                sc_owners[id, -1] = 1
 
         # Area type: fill out from area id
         for id in range(81):
@@ -226,7 +254,7 @@ class WelfareDiplomacyState(DiplomacyState):
                 area_types[id, 2] = 1
             elif province_id >= 14 and province_id < 33: # sea
                 area_types[id,1] = 1
-            else: # all land with 0 or 1 coast
+            else: # all land with 0 or 1 coast, or main area of bicoastal
                 area_types[id, 0] = 1
 
         board = np.concatenate(
