@@ -22,6 +22,7 @@ from collections import OrderedDict
 
 from diplomacy.environment import observation_utils as utils
 from diplomacy.environment import mila_actions
+from diplomacy.environment import human_readable_actions
 
 
 class DiplomacyState(typing_extensions.Protocol):
@@ -151,7 +152,12 @@ class WelfareDiplomacyState(DiplomacyState):
         # Areas containing units and owned supply centres
         for power_ix, (power_name, power) in enumerate(powers.items()):
 
+            #print('dislodged units', power.retreats)
+
+            #print(power_name, 'build sites', game._build_sites(power))
             build_count = len(power.centers) - len(power.units)
+
+            build_sites = game._build_sites(power)
 
             for unit in game.get_units(power_name): # contains dislodgement info (*), unlike power.units (returns power.units[:] + [<dislodged units>])
                 
@@ -165,15 +171,20 @@ class WelfareDiplomacyState(DiplomacyState):
                 province_id, area_ix = utils.province_id_and_area_index(id)
                 province_type = utils.province_type_from_id(province_id)
 
+                # Old
                 if area_ix > 0:
                     bicoastal_main_id = utils.area_from_province_id_and_area_index(province_id, 0)
                 else:
                     bicoastal_main_id = None
-                
 
+                # Set ID to all 3 areas if bicoastal
+                if province_type == utils.ProvinceType.BICOASTAL:
+                    all_ids = [utils.area_from_province_id_and_area_index(province_id, n) for n in range(3)]
+                
                 # Fill in unit & owner info for area
                 unit_type_ix = 0 if unit_type=='A' else 1
 
+                # Old
                 # If unit in coast of bicoastal, also add unit flag for main area
                 if area_ix > 0:
                     id = [id, bicoastal_main_id]
@@ -186,9 +197,8 @@ class WelfareDiplomacyState(DiplomacyState):
                     # Set 'no unit' to 0
                     unit_types[id, -1] = 0
                     unit_owners[id, -1] = 0
-                        
-
                 else:
+                    print('there is a dislodged unit here! in', province)
                     dislodgeds[id, unit_type_ix] = 1
                     dislodged_owners[id, power_ix] = 1
                     # Set 'no dislodged unit' to 0
@@ -199,6 +209,10 @@ class WelfareDiplomacyState(DiplomacyState):
                 # Removable: if power has more units than centers, then this unit is removable
                 if build_count < 0:
                     removables[id] = 1
+                    if province_type == utils.ProvinceType.BICOASTAL:
+                        removables[all_ids] = 1
+                    else:
+                        removables[id] = 1
                     
 
             for sc in power.centers: # mainland only
@@ -214,14 +228,30 @@ class WelfareDiplomacyState(DiplomacyState):
                 # Supply center owner
                 sc_owners[sc_ids, power_ix] = 1
 
+                # MAYBE REMOVE
+                # Set ID to all 3 areas if bicoastal
+                if province_type == utils.ProvinceType.BICOASTAL:
+                    all_ids = [utils.area_from_province_id_and_area_index(province_id, n) for n in range(3)]
+
                 # Buildable
-                if sc in game._build_sites(power) and build_count > 0:
-                    buildables[id] = 1
+                # Use the build count if BUILD season, otherwise used stored build number
+                if season == utils.Season.BUILDS:
+                    if sc in build_sites and build_count > 0:
+                        if province_type == utils.ProvinceType.BICOASTAL:
+                            buildables[all_ids] = 1
+                        else:
+                            buildables[id] = 1
+                else:
+                    if sc in build_sites and build_numbers[power_ix] > 0:
+                        if province_type == utils.ProvinceType.BICOASTAL:
+                            buildables[all_ids] = 1
+                        else:
+                            buildables[id] = 1
 
                 supply_centers_owned.add(sc)
 
             # Set build numbers if build season
-            if season == 'BUILD':
+            if season == utils.Season.BUILDS:
                 if build_count < 0:
                     build_numbers[power_ix] = build_count
                 else:
@@ -229,12 +259,11 @@ class WelfareDiplomacyState(DiplomacyState):
                     build_numbers[power_ix] = min(build_count, game._build_limit(power))
         
         # Store build numbers if build season
-        if season == 'BUILD':          
+        if season == utils.Season.BUILDS:          
             self._build_numbers = build_numbers
         # Otherwise access numbers from last build season with positives zeroed out, if not first year
         elif self._build_numbers:
-            mask = self._build_numbers < 0
-            build_numbers = self._build_numbers * mask
+            build_numbers = [n if n < 0 else 0 for n in self._build_numbers]
 
         
         # Unoccupied supply centres
@@ -286,14 +315,14 @@ class WelfareDiplomacyState(DiplomacyState):
             # If BUILD phase and loc is a build site for power, then all orders in that loc belong to that power
             if game.phase_type == "A" and loc in build_sites_by_loc.keys():
                 power = build_sites_by_loc[loc]
-                orders_by_power[power].append(possible_orders)
+                orders_by_power[power] += possible_orders
 
             # Otherwise, the possible_orders refer to a unit in loc. Check who owns the unit
             else:
                 unit = game._occupant(loc)
                 if unit:
                     unit_owner = game._unit_owner(unit) # returns power instance
-                    orders_by_power[unit_owner].append(possible_orders)
+                    orders_by_power[unit_owner] += possible_orders
 
 
         # I think these actions are all the legal (i.e., possible given the board state) actions; if not, may want to run commented out code instead of the code below
@@ -315,17 +344,25 @@ class WelfareDiplomacyState(DiplomacyState):
         #               action = mila_actions.mila_action_to_action(order, season)
         #               legal_actions_by_power[power].append(action)        
 
+        # for step()
+        #print('orders by power dict', orders_by_power)
+
+        # dont need this rlly
+        orders_by_power_list = [orders_by_power[power] for _, power in sorted(powers.items())]
+
+        
         season = self.observation().season
-        legal_actions_by_power = {power: [] for power in powers.values()}
+
+        legal_actions = [[] for _ in powers.values()]
+
 
         # Convert MILA orders to DM actions
-        for power in powers.values():
-            for orders in orders_by_power[power]:
-                for order in orders:
-                    action = mila_actions.mila_action_to_action(order, season)
-                    legal_actions_by_power[power].append(action)
+        for power_ix, power_orders in enumerate(orders_by_power_list):
+            for order in power_orders:
+                action = mila_actions.mila_action_to_action(order, season)
+                legal_actions[power_ix].append(action)
 
-        legal_actions = [legal_actions_by_power[power] for power in legal_actions_by_power]
+        self.mila_legal_orders = orders_by_power_list
             
         return legal_actions
     
@@ -346,20 +383,23 @@ class WelfareDiplomacyState(DiplomacyState):
         game = self.game
         powers = self.powers
         legal_actions = self.legal_actions()
+        board = self.observation().board
 
         # Convert actions to MILA orders; orders will be lists, mostly with one item but some with multiple
         orders = [[mila_actions.action_to_mila_actions(act) for act in player] for player in actions_per_player]
+
+        # print('mila orders first step', orders)
         
         orders_reduced = [[],[],[],[],[],[],[],]
 
         # Reduces lists of possible orders to a single order
         for player_ix, orders_per_player in enumerate(orders):
             for order in orders_per_player:
-                # order is a list of possible orders
+                # Order is a list of possible orders
                 if len(order) > 1:
-                    # Get legal one from list of possible actions - uses self.legal_actions
+                    # Get legal one from list of possible actions
                     for possible_order in order:
-                        if possible_order in legal_actions[player_ix]:
+                        if possible_order in self.mila_legal_orders[player_ix]:
                             orders_reduced[player_ix].append(possible_order)
                             break
                 else:
