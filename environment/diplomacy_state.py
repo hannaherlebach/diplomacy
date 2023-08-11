@@ -69,10 +69,274 @@ class DiplomacyState(typing_extensions.Protocol):
 
 from welfare_diplomacy.engine.game import Game
 
+# Create a subclass of Game for baselines to play, using the standard_welfare map but using legal actions from the standard map.
+
+# This is a kinda dumb way to do it (just copied in the get_all_possible_orders() method and removed "if self.welfare", bc I can't set the attribute self.welfare); could also go in and edit welfare_diplomacy.engine.game, but let's just do this for now.
+
+class BaselineGame(Game):
+    def __init__(self):
+        super().__init__(map_name='standard_welfare')
+
+    def get_all_possible_orders(self):
+        """Computes a list of all possible orders for all locations, but I've removed any mention of welfare.
+
+        :return: A dictionary with locations as keys, and their respective list of possible orders as values
+        """
+        # Would ideally do:
+
+        # original_welfare = self.welfare
+
+        # # Temporarily set welfare to False
+        # self.welfare = False
+        # orders = super().get_all_possible_orders()
+
+        # # Resore welfare
+        # self.welfare = original_welfare
+
+        # return orders
+
+        # Instead do:
+        assert self.map is not None
+        # pylint: disable=too-many-branches,too-many-nested-blocks
+        possible_orders = {loc.upper(): set() for loc in self.map.locs}
+
+        # Game is completed
+        if self.get_current_phase() == "COMPLETED":
+            return {loc: list(possible_orders[loc]) for loc in possible_orders}
+
+        # Building a dict of (unit, is_dislodged, retreat_list, duplicate) for each power
+        # duplicate is to indicate that the real unit has a coast, and that was added a duplicate unit without the coast
+        unit_dict = {}
+        for power in self.powers.values():
+            # Regular units
+            for unit in power.units:
+                unit_loc = unit[2:]
+                unit_dict[unit_loc] = (unit, False, [], False)
+                if "/" in unit_loc:
+                    unit_dict[unit_loc[:3]] = (unit, False, [], True)
+
+            # Dislodged units
+            for unit, retreat_list in power.retreats.items():
+                unit_loc = unit[2:]
+                unit_dict["*" + unit_loc] = (unit, True, retreat_list, False)
+
+        # Building a list of build counts and build_sites
+        build_counts = {
+            power_name: len(power.centers) - len(power.units)
+            if self.phase_type == "A"
+            else 0
+            for power_name, power in self.powers.items()
+        }
+        build_sites = {
+            power_name: self._build_sites(power) if self.phase_type == "A" else []
+            for power_name, power in self.powers.items()
+        }
+
+        # Movement phase
+        if self.phase_type == "M":
+            # Building a list of units and homes for each power
+            power_units = {
+                power_name: power.units[:] for power_name, power in self.powers.items()
+            }
+
+            # Hold
+            for power_name in self.powers:
+                for unit in power_units[power_name]:
+                    order = unit + " H"
+                    possible_orders[unit[2:]].add(order)
+                    if "/" in unit:
+                        possible_orders[unit[2:5]].add(order)
+
+            # Move, Support, Convoy
+            for power_name in self.powers:
+                for unit in power_units[power_name]:
+                    unit_type, unit_loc = unit[0], unit[2:]
+                    unit_on_coast = "/" in unit_loc
+                    for dest in self.map.dest_with_coasts[unit_loc]:
+                        # Move (Regular)
+                        if self._abuts(unit_type, unit_loc, "-", dest):
+                            order = unit + " - " + dest
+                            possible_orders[unit_loc].add(order)
+                            if unit_on_coast:
+                                possible_orders[unit_loc[:3]].add(order)
+
+                        # Support (Hold)
+                        if self._abuts(unit_type, unit_loc, "S", dest):
+                            if dest in unit_dict:
+                                other_unit, _, _, duplicate = unit_dict[dest]
+                                if not duplicate:
+                                    order = unit + " S " + other_unit[0] + " " + dest
+                                    possible_orders[unit_loc].add(order)
+                                    if unit_on_coast:
+                                        possible_orders[unit_loc[:3]].add(order)
+
+                        # Support (Move)
+                        # Computing src of move (both from adjacent provinces and possible convoys)
+                        # We can't support a unit that needs us to convoy it to its destination
+                        abut_srcs = self.map.abut_list(dest, incl_no_coast=True)
+                        convoy_srcs = self._get_convoy_destinations(
+                            "A", dest, exclude_convoy_locs=[unit_loc]
+                        )
+
+                        # Computing coasts for source
+                        src_with_coasts = [
+                            self.map.find_coasts(src) for src in abut_srcs + convoy_srcs
+                        ]
+                        src_with_coasts = {
+                            val for sublist in src_with_coasts for val in sublist
+                        }
+
+                        for src in src_with_coasts:
+                            if src not in unit_dict:
+                                continue
+                            src_unit, _, _, duplicate = unit_dict[src]
+                            if duplicate:
+                                continue
+
+                            # Checking if src unit can move to dest (through adj or convoy), and that we can support it
+                            # Only armies can move through convoy
+                            if (
+                                src[:3] != unit_loc[:3]
+                                and self._abuts(unit_type, unit_loc, "S", dest)
+                                and (
+                                    (src in convoy_srcs and src_unit[0] == "A")
+                                    or self._abuts(src_unit[0], src, "-", dest)
+                                )
+                            ):
+                                # Adding with coast
+                                order = (
+                                    unit
+                                    + " S "
+                                    + src_unit[0]
+                                    + " "
+                                    + src
+                                    + " - "
+                                    + dest
+                                )
+                                possible_orders[unit_loc].add(order)
+                                if unit_on_coast:
+                                    possible_orders[unit_loc[:3]].add(order)
+
+                                # Adding without coasts
+                                if "/" in dest:
+                                    order = (
+                                        unit
+                                        + " S "
+                                        + src_unit[0]
+                                        + " "
+                                        + src
+                                        + " - "
+                                        + dest[:3]
+                                    )
+                                    possible_orders[unit_loc].add(order)
+                                    if unit_on_coast:
+                                        possible_orders[unit_loc[:3]].add(order)
+
+                    # Move Via Convoy
+                    for dest in self._get_convoy_destinations(unit_type, unit_loc):
+                        order = unit + " - " + dest + " VIA"
+                        possible_orders[unit_loc].add(order)
+
+                    # Convoy
+                    if unit_type == "F":
+                        convoy_srcs = self._get_convoy_destinations(
+                            unit_type, unit_loc, unit_is_convoyer=True
+                        )
+                        for src in convoy_srcs:
+                            # Making sure there is an army at the source location
+                            if src not in unit_dict:
+                                continue
+                            src_unit, _, _, _ = unit_dict[src]
+                            if src_unit[0] != "A":
+                                continue
+
+                            # Checking where the src unit can actually go
+                            convoy_dests = self._get_convoy_destinations(
+                                "A", src, unit_is_convoyer=False
+                            )
+
+                            # Adding them as possible moves
+                            for dest in convoy_dests:
+                                if self._has_convoy_path(
+                                    "A", src, dest, convoying_loc=unit_loc
+                                ):
+                                    order = unit + " C A " + src + " - " + dest
+                                    possible_orders[unit_loc].add(order)
+
+        # Retreat phase
+        if self.phase_type == "R":
+            # Finding all dislodged units
+            for unit_loc, (
+                unit,
+                is_dislodged,
+                retreat_list,
+                duplicate,
+            ) in unit_dict.items():
+                if not is_dislodged or duplicate:
+                    continue
+                unit_loc = unit_loc[1:]  # Removing the leading *
+                unit_on_coast = "/" in unit_loc
+
+                # Disband
+                order = unit + " D"
+                possible_orders[unit_loc].add(order)
+                if unit_on_coast:
+                    possible_orders[unit_loc[:3]].add(order)
+
+                # Retreat
+                for dest in retreat_list:
+                    if dest[:3] not in unit_dict:
+                        order = unit + " R " + dest
+                        possible_orders[unit_loc].add(order)
+                        if unit_on_coast:
+                            possible_orders[unit_loc[:3]].add(order)
+
+        # Adjustment phase
+        if self.phase_type == "A":
+            # Building a list of units for each power
+            power_units = {
+                power_name: power.units[:] for power_name, power in self.powers.items()
+            }
+
+            for power_name in self.powers:
+                power_build_count = build_counts[power_name]
+                power_build_sites = build_sites[power_name]
+
+                # Disband
+                if power_build_count < 0:
+                    for unit in power_units[power_name]:
+                        unit_on_coast = "/" in unit
+                        order = unit + " D"
+                        possible_orders[unit[2:]].add(order)
+                        if unit_on_coast:
+                            possible_orders[unit[2:5]].add(order)
+
+                # Build
+                if power_build_count > 0:
+                    for site in power_build_sites:
+                        for loc in self.map.find_coasts(site):
+                            unit_on_coast = "/" in loc
+                            if self.map.is_valid_unit("A " + loc):
+                                possible_orders[loc].add("A " + loc + " B")
+                            if self.map.is_valid_unit("F " + loc):
+                                possible_orders[loc].add("F " + loc + " B")
+                                if unit_on_coast:
+                                    possible_orders[loc[:3]].add("F " + loc + " B")
+
+                # Waive
+                if power_build_count > 0:
+                    for site in power_build_sites:
+                        for loc in self.map.find_coasts(site):
+                            possible_orders[loc].add("WAIVE")
+
+        # Returning
+        return {loc: list(possible_orders[loc]) for loc in possible_orders}
+
 class WelfareDiplomacyState(DiplomacyState):
   
-    def __init__(self, game: Game):
+    def __init__(self, game: BaselineGame):
         self.game = game
+        print('Map name from inside WelfareDiplomacyState', game.map_name)
 
         # Get a sorted list of power tuples of form 'power name: power instance'
         # game.powers is a dict of form {'FRANCE': FrancePower, ...}
@@ -291,7 +555,7 @@ class WelfareDiplomacyState(DiplomacyState):
         if self._last_actions:
             last_actions = [action for power in self._last_actions for action in power]
         else:
-            last_actions = None
+            last_actions = []
 
         return utils.Observation(season, board, build_numbers, last_actions)
     
@@ -300,16 +564,8 @@ class WelfareDiplomacyState(DiplomacyState):
         powers = self.powers
         self.mila_legal_orders = []
 
+        # Get possible orders with welfare set to False
         possible_orders_by_loc = game.get_all_possible_orders()
-
-        print(f'{len(game.map.locs)=}')
-        print(f'{len(list(possible_orders_by_loc.keys()))=}')
-
-        list_of_orders = list(possible_orders_by_loc.values())
-        flattened_orders = [order for orders in list_of_orders for order in orders]
-
-        print(f'{len(set(flattened_orders))=}')
-        print(' ')
 
         # Get possible orders per power from possible orders by location
         possible_orders_by_power = {power: [] for power in powers.values()}
@@ -317,9 +573,7 @@ class WelfareDiplomacyState(DiplomacyState):
         # Retreats phase
         if game.phase_type == 'R' and game.dislodged:
             # Only possible moves are by dislodged units
-            #print(f'{game.dislodged=}')
             for power in powers.values():
-                #print(power.name, f'{power.retreats=}')
                 for unit in power.retreats:
                     loc = unit[2:]
                     possible_orders_by_power[power] += possible_orders_by_loc[loc]
@@ -341,29 +595,6 @@ class WelfareDiplomacyState(DiplomacyState):
                             possible_orders_by_power[power] += orders
         # Note: these orders are still in string form.
 
-
-        # ORIGINAL
-
-        # # Get possible orders from MILA
-        # orders_by_power = {power: [] for power in powers.values()}
-
-        # build_sites = {power: game._build_sites(power) if game.phase_type == "A" else []
-        #                      for power in powers.values()}
-        # build_sites_by_loc = {site: power for power, sites in build_sites.items() for site in sites}
-
-        # for loc, possible_orders in game.get_all_possible_orders().items():
-            
-        #     # If BUILD phase and loc is a build site for power, then all orders in that loc belong to that power
-        #     if game.phase_type == "A" and loc in build_sites_by_loc.keys():
-        #         power = build_sites_by_loc[loc]
-        #         orders_by_power[power] += possible_orders
-
-        #     # Otherwise, the possible_orders refer to a unit in loc. Check who owns the unit
-        #     else:
-        #         unit = game._occupant(loc)
-        #         if unit:
-        #             unit_owner = game._unit_owner(unit) # returns power instance
-        #             orders_by_power[unit_owner] += possible_orders
 
         # Store orders by power in MILA format for use in step() method
         orders_by_power_list = [possible_orders_by_power[power] for _, power in sorted(powers.items())]
@@ -393,11 +624,16 @@ class WelfareDiplomacyState(DiplomacyState):
         """The returns of the game. All 0s if the game is in progress."""
 
         # (Not sure if this should be cumulative, or only at end of game)
+        # VERSION 1: only returns at end
         if self.game.get_current_phase() == 'COMPLETED':
             welfare_points = [power.welfare_points for power in self.powers.values()]
             return np.array(welfare_points)
         else:
             return np.zeros(7) # dtype?
+        
+        # VERSION 2: cumulative returns
+        # welfare_points = [power.welfare_points for power in self.powers.values()]
+        # return np.array(welfare_points)
     
     def step(self, actions_per_player: Sequence[Sequence[int]]) -> None:
         # actions_per_player are given as 64-bit integers
@@ -422,7 +658,7 @@ class WelfareDiplomacyState(DiplomacyState):
                             orders_reduced[power_ix].append(possible_order)
                             order_resolved = True
                             break
-                    assert order_resolved, 'None of possible orders in legal orders; possible orders are {}'.format(order)
+                    #assert order_resolved, 'None of possible orders in legal orders; possible orders are {}'.format(order)
                 else:
                     # Get string from single-item list
                     orders_reduced[power_ix].append(order[0])
@@ -438,3 +674,5 @@ class WelfareDiplomacyState(DiplomacyState):
 
         # Store actions for next observation
         self._last_actions = actions_per_player
+
+
