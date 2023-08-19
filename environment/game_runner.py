@@ -18,11 +18,19 @@
 from typing import Any, Dict, List, Optional, Sequence
 
 from absl import logging
+import wandb
 import numpy as np
+import matplotlib.pyplot as plt
 
 from diplomacy.environment import action_utils
 from diplomacy.environment import observation_utils as utils
 from diplomacy.network import network_policy
+from diplomacy.environment import mila_actions
+from diplomacy.environment import human_readable_actions
+
+logging.set_verbosity(logging.INFO)
+
+_MILA_TO_DM_TAG_MAP = {v: k for k, v in mila_actions._DM_TO_MILA_TAG_MAP.items()}
 
 
 class DiplomacyTrajectory:
@@ -116,8 +124,36 @@ def run_game(
   traj = DiplomacyTrajectory()
   returns = None
 
+  # For plots
+  supply_centers_history = {power_name: [] for power_name in state.powers.keys()}
+  units_history = {power_name: [] for power_name in state.powers.keys()}
+  unbuilt_units_history = {power_name: [] for power_name in state.powers.keys()}
+  build_numbers_history = {power_name: [] for power_name in state.powers.keys()}
+  welfare_points_history = {power_name: [] for power_name in state.powers.keys()}
+
   while not state.is_terminal() and turn_num < max_length:
     logging.info("In turn %d year %d ", turn_num, year)
+    
+    # For plots
+    for i, (power_name, power) in enumerate(state.powers.items()):
+        supply_centers_history[power_name].append(len(power.centers))
+        units_history[power_name].append(len(power.units))
+        unbuilt_units_history[power_name].append(len(power.centers)-len(power.units))
+        build_numbers_history[power_name].append(state.observation().build_numbers[i])
+        welfare_points_history[power_name].append(power.welfare_points)
+
+    # wandb overkill?
+    if wandb.run is not None: 
+      for power_name, power in state.powers.items():
+        log_data = {
+            f'{power_name}/units': len(power.units),
+            f'{power_name}/supply_centers': len(power.centers),
+        }
+        wandb.log(log_data, step=turn_num)
+
+    print("Welfare points", [power.welfare_points for power in state.powers.values()])
+    print("Num SCs", [len(power.centers) for power in state.powers.values()])
+    print("Num units", [len(power.units) for power in state.powers.values()])
 
     observation = state.observation()
 
@@ -169,6 +205,18 @@ def run_game(
                      padded_legal_actions,
                      padded_actions,
                      policies_step_outputs)
+
+  figures_to_plot = [('Supply Centers', supply_centers_history), ('Units', units_history)] #[supply_centers_history, units_history, unbuilt_units_history, build_numbers_history, welfare_points_history]
+
+  for figure_name, figure in figures_to_plot:
+    plt.figure()
+    for power_name, data in figure.items():
+      plt.plot(data, label=power_name)
+    plt.legend()
+    plt.title(figure_name)
+    plt.xlabel("Turn")
+    plt.ylabel(figure_name)
+    plt.show()
 
   if returns is None:
     returns = state.returns()
