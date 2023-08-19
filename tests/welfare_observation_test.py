@@ -23,7 +23,7 @@ SL = True
 file_path = '/Users/hannaherlebach/research/diplomacy_parameters/'
 
 # Create game instance
-game = Game()
+game = Game(map_name='standard_welfare')
 
 class WelfareObservationTest(observation_test.ObservationTest):
 

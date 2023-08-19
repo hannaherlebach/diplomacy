@@ -345,6 +345,8 @@ class WelfareDiplomacyState(DiplomacyState):
 
         self._build_numbers = None
         self._last_actions = None
+        
+        self.turn_num = 0
 
     def is_terminal(self) -> bool:
         return self.game.is_game_done
@@ -658,7 +660,18 @@ class WelfareDiplomacyState(DiplomacyState):
                             orders_reduced[power_ix].append(possible_order)
                             order_resolved = True
                             break
-                    #assert order_resolved, 'None of possible orders in legal orders; possible orders are {}'.format(order)
+                    
+                    # If not in MILA legal orders, look for order with a unit that the power owns
+                    if not order_resolved:
+                        for possible_order in order:
+                            word = possible_order.split()
+                            unit = " ".join(word[:2])
+                            if unit in list(powers.values())[power_ix].units:
+                                orders_reduced[power_ix].append(possible_order)
+                                order_resolved = True
+                                break
+        
+                    assert order_resolved, 'None of possible orders in legal orders; possible orders are {}'.format(order)
                 else:
                     # Get string from single-item list
                     orders_reduced[power_ix].append(order[0])
@@ -671,6 +684,7 @@ class WelfareDiplomacyState(DiplomacyState):
 
         # Step forward the environment
         game.process()
+        self.turn_num += 1
 
         # Store actions for next observation
         self._last_actions = actions_per_player
