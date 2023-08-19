@@ -15,105 +15,6 @@ from diplomacy.environment import action_utils
 
 _MILA_TO_DM_TAG_MAP = {v: k for k, v in mila_actions._DM_TO_MILA_TAG_MAP.items()}
 
-class PolicyUtils:
-    """Utility functions for hard-coding modifications to trained policies."""
-    def __init__(self, game):
-        self.game = game
-        self.powers = game.powers
-        self.map = game.map
-
-
-    def get_unit_adjacency_value(self, unit, unit_owner):
-        """Returns the number of enemy units in adjacent provinces to the given unit.
-        
-        Args:
-            unit: a MILA unit string.
-            unit_owner: a Power instance"""
-        
-        loc = unit[2:]
-        adj_locs = self.map.loc_abut[loc]
-        adj_value = 0
-        enemy_powers = [power for power in self.powers.values() if power != unit_owner]
-        for power in enemy_powers:
-            for unit in power.units:
-                unit_loc = unit[2:]
-                adj_value += 1 if unit_loc in adj_locs else 0
-        return adj_value
-
-
-    def sort_units_by_adjacency(self, power):
-        """Sorts a power's units by unit-adjacency values.
-        
-        Args:
-            power: a Power instance.
-            
-        Returns:
-            A list of units sorted by unit-adjacency values."""
-        
-        adj_values = {}
-        for unit in power.units:
-            adj_value = self.get_unit_adjacency_value(unit)
-            adj_values[unit] = adj_value
-            
-        sorted_units = [unit for unit, _ in sorted(adj_values.items(), key=lambda item: item[1])]
-
-        return sorted_units
-
-    def random_disband_actions(self, p, power):
-        """Returns a disband action for each unit belonging to a given power with probability p.
-        
-        Args:
-            p: probability of disbanding each unit.
-            power: a Power instance.
-            
-        Returns:
-            A list of disband actions."""
-        
-        power_name = power.name
-        actions = []
-
-        for unit in power.units:
-            unit_province = unit[2:]
-            unit_province_dm = _MILA_TO_DM_TAG_MAP.get(unit_province, unit_province)
-            # Convert province to ProvinceWithFlag tuple
-            area_id = mila_actions._tag_to_area_id[unit_province_dm]
-            province_id, area_ix = utils.province_id_and_area_index(area_id)
-            if area_ix > 0:
-                coast_flag = 1
-            else:
-                coast_flag = 0
-            province_tuple = (province_id, coast_flag)
-
-            disband_action = action_utils.construct_action(8, province_tuple, None, None)
-            # print('disband action', human_readable_actions.action_string(disband_action, observation.board))
-            if np.random.uniform() < p:
-                print(power_name, "disbanding", unit)
-                actions.append(disband_action)
-            else:
-                print(power_name, "not disbanding", unit)
-
-        return actions
-
-    def disband_least_adjacent_actions(self, num_to_disband, power):
-        """Disbands units with the lowest unit-adjacency values. If there are fewer units than num_to_disband, then all units will be disbanded.
-        
-        Args:
-            num_to_disband: number of units to disband.
-            power: a Power instance
-            
-        Returns:
-            A list of disband actions."""
-        num_units = len(power.units)
-
-        if num_to_disband >= num_units:
-            actions = [action_utils.construct_action(8, unit[2:], None, None) for unit in power.units]
-            return actions
-        
-        sorted_units = self.policy_utils.sort_units_by_adjacency(power)
-        units_to_disband = sorted_units[:num_to_disband]
-        disband_orders = [unit + ' D' for unit in units_to_disband]
-        return disband_orders
-
 file_path = '/Users/hannaherlebach/research/diplomacy_parameters/'
 
 # Get base network policy
@@ -194,7 +95,32 @@ class RandomDisbandPolicy:
     
 class SmartDisbandPolicy:
     """Agent which disbands the units with fewest adjacent enemy units first."""
-    pass
+    def __init__(self, num_to_disband):
+        self.num_to_disband = num_to_disband
+
+    def reset(self):
+        pass
+
+    def actions(self, slots_list, observation, legal_actions):
+        board = observation.board
+        season = observation.season
+
+        units = board[:, 3:10]
+        dislodgeds = board[:, 16:23]
+
+        actions = [[] for _ in slots_list]
+
+        if season == utils.Season.BUILDS:
+            for i, power_ix in enumerate(slots_list):
+                units_power = units[:, power_ix]
+                dislodgeds_power = dislodgeds[:, power_ix]
+                
+                # Get adjacency order
+
+        # In all other phases, hold
+        
+        return [actions, {'values': None, 'policy': None, 'actions': None}] #fill out this shit later
+
 
 # Switch conditions
 def switch_after_k_turns(turn_num, power_ix, observation, k):
