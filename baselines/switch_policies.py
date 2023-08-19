@@ -112,6 +112,7 @@ class PolicyUtils:
         disband_orders = [unit + ' D' for unit in units_to_disband]
         return disband_orders
 
+file_path = '/Users/hannaherlebach/research/diplomacy_parameters/'
 
 # Get base network policy
 def get_network_policy_instance(SL=True):
