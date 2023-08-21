@@ -623,19 +623,13 @@ class WelfareDiplomacyState(DiplomacyState):
     
     
     def returns(self) -> np.ndarray:
-        """The returns of the game. All 0s if the game is in progress."""
-
-        # (Not sure if this should be cumulative, or only at end of game)
-        # VERSION 1: only returns at end
-        if self.game.get_current_phase() == 'COMPLETED':
-            welfare_points = [power.welfare_points for power in self.powers.values()]
-            return np.array(welfare_points)
-        else:
-            return np.zeros(7) # dtype?
+        """The returns of the game, equal to welfare points.
         
-        # VERSION 2: cumulative returns
-        # welfare_points = [power.welfare_points for power in self.powers.values()]
-        # return np.array(welfare_points)
+        Could also set to all 0 while the game is still in progress, but doesn't make a difference."""
+
+        welfare_points = [power.welfare_points for power in self.powers.values()]
+        return np.array(welfare_points)
+        
     
     def step(self, actions_per_player: Sequence[Sequence[int]]) -> None:
         # actions_per_player are given as 64-bit integers
