@@ -82,12 +82,12 @@ def parse_args():
     parser = argparse.ArgumentParser(description='Run a game of Welfare Diplomacy.')
 
     # Arguments are None if not set in command line. Args need to be set with 0, 1 or num_policies elements. If an arg has length 1 but num_policies > 1, it is assumed that all policies take the same arg value.
-    parser.add_argument("--max_length", type=int, default=20, help="Maximum number of game steps.")
+    parser.add_argument("--max_length", type=int, default=30, help="Maximum number of game steps.")
     parser.add_argument('--num_policies', type=int, default=1, help='Number of different policies.')
     parser.add_argument('--switch_after_turns', type=int, nargs='*', help='Number of turns after which to switch')
     parser.add_argument('--switch_after_supply_centers', type=int, nargs='*', help='Number of supply centers after which to switch')
     parser.add_argument('--random_disband', type=float, nargs='*', help='Probability for RandomDisbandPolicy')
-    parser.add_argument('--network_algorithm', type=str, nargs='+', default='SL', choices=['SL', 'FPPI2'], help='Learning algorithm used to get network policy parameters. 0 = SL, 1 = FPP12.')
+    parser.add_argument('--network_algorithm', type=str, nargs='+', default='SL', choices=['SL', 'FPPI2'], help='Learning algorithm used to get network policy parameters.')
     parser.add_argument('--slots_list', type=int, nargs=7, default=[0]*7, help='Mapping from policies to slots (powers). A list of length 7 with elements taking values up to num_policies.')
 
     args = parser.parse_args()
@@ -330,7 +330,9 @@ class SimultaneousSwitchPolicy:
 
 
 def run_experiment(policies, slots_to_policies, max_length=20, args=None):
-    """Runs the chosen set of policies on Welfare Diplomacy."""
+    """Runs the chosen set of policies on Welfare Diplomacy.
+    
+    Returns the trajectory of the game."""
     game_instance = diplomacy_state.BaselineGame() # defo cursed
     initial_state = diplomacy_state.WelfareDiplomacyState(game_instance)
     trajectory = game_runner.run_game(
@@ -343,6 +345,9 @@ def run_experiment(policies, slots_to_policies, max_length=20, args=None):
     logging.info('Policies: %s', policies)
     print('Trajectory', trajectory)
     print(trajectory.observations[-1].season)
+    print(f'{trajectory.returns=}')
+
+    return trajectory
 
 
 if __name__ == '__main__':
