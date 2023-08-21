@@ -1,8 +1,10 @@
 import os
 import wandb
-from tqdm import tqdm
+#from tqdm import tqdm
 import numpy as np
 from functools import partial
+import logging
+import argparse
 
 from diplomacy.network import config
 from diplomacy.network import network_policy
@@ -13,17 +15,98 @@ from diplomacy.environment import observation_utils as utils
 from diplomacy.environment import mila_actions
 from diplomacy.environment import action_utils
 
+from welfare_diplomacy.engine.map import Map
+
+logging.basicConfig(filename='switch_policies.log', filemode='a', level=logging.INFO)
+
+welfare_map = Map('standard_welfare')
+
 _MILA_TO_DM_TAG_MAP = {v: k for k, v in mila_actions._DM_TO_MILA_TAG_MAP.items()}
 
-file_path = '/Users/hannaherlebach/research/diplomacy_parameters/'
+
+
+def main():
+
+    args = parse_args()
+    num_policies = args.num_policies
+    network_policies = [None] * num_policies
+    switch_conditions = [None] * num_policies
+    disband_policies = [None] * num_policies
+
+    # Network policy
+    if args.network_algorithm:
+        if len(args.network_algorithm) == 1:
+            network_policies = [get_network_policy_instance(args.network_algorithm[0]) for _ in range(num_policies)]
+        else:
+            assert len(args.network_algorithm) == num_policies, 'Number of network algorithms must be 1 or equal to number of policies.'
+            for i in range(num_policies):
+                network_policies[i] = get_network_policy_instance(args.network_algorithm[i])
+
+    # Switch condition
+    if args.switch_after_turns and len(args.switch_after_turns) == 1:
+        switch_conditions = [partial(switch_after_k_turns, k=args.switch_after_turns[0]) for _ in range(num_policies)]
+    elif args.switch_after_supply_centers and len(args.switch_after_supply_centers) == 1:
+        switch_conditions = [partial(switch_after_k_supply_centers, k=args.switch_after_supply_centers[0]) for _ in range(num_policies)]
+    else:
+        assert len(args.switch_after_turns) == num_policies or len(args.switch_after_supply_centers) == num_policies, 'If switch condition is set, number of switch conditions must be 1 or equal to number of policies.'
+        for i in range(num_policies):
+            if args.switch_after_turns and args.switch_after_turns[i]:
+                switch_conditions[i] = partial(switch_after_k_turns, k=args.switch_after_turns[i])
+            elif args.switch_after_supply_centers and args.switch_after_supply_centers[i]:
+                switch_conditions[i] = partial(switch_after_k_supply_centers, k=args.switch_after_supply_centers[i])
+            else:
+                # No other switch conditions available at this time
+                raise ValueError('No switch condition given.')
+
+    if args.random_disband:
+        if len(args.random_disband) == 1:
+            disband_policies = [RandomDisbandPolicy(p=args.random_disband[0]) for _ in range(num_policies)]
+        else:
+            assert len(args.random_disband) == num_policies, 'Number of disband policies must be 1 or equal to number of policies.'
+            for i in range(num_policies):
+                disband_policies[i] = RandomDisbandPolicy(p=args.random_disband[i])
+
+    # Putting it all together
+    policies = tuple([SwitchPolicy(network_policies[i], switch_conditions[i], disband_policies[i]) for i in range(num_policies)])
+    
+    # Run experiment
+    trajectory = run_experiment(
+        policies=policies,
+        slots_to_policies=args.slots_list,
+        max_length=args.max_length
+    )
+
+def parse_args():
+    """Parse command-line arguments."""
+    parser = argparse.ArgumentParser(description='Run a game of Welfare Diplomacy.')
+
+    # Arguments are None if not set in command line. Args need to be set with 0, 1 or num_policies elements. If an arg has length 1 but num_policies > 1, it is assumed that all policies take the same arg value.
+    parser.add_argument("--max_length", type=int, default=20, help="Maximum number of game steps.")
+    parser.add_argument('--num_policies', type=int, default=1, help='Number of different policies.')
+    parser.add_argument('--switch_after_turns', type=int, nargs='*', help='Number of turns after which to switch')
+    parser.add_argument('--switch_after_supply_centers', type=int, nargs='*', help='Number of supply centers after which to switch')
+    parser.add_argument('--random_disband', type=float, nargs='*', help='Probability for RandomDisbandPolicy')
+    parser.add_argument('--network_algorithm', type=str, nargs='+', default='SL', choices=['SL', 'FPPI2'], help='Learning algorithm used to get network policy parameters. 0 = SL, 1 = FPP12.')
+    parser.add_argument('--slots_list', type=int, nargs=7, default=[0]*7, help='Mapping from policies to slots (powers). A list of length 7 with elements taking values up to num_policies.')
+
+    args = parser.parse_args()
+    return args
+
+
 
 # Get base network policy
-def get_network_policy_instance(SL=True):
-    """Returns a network policy instance, using SL or FFPI-2 parameters."""
-    if SL:
+def get_network_policy_instance(algorithm='SL', file_path='/Users/hannaherlebach/research/diplomacy_parameters/'):
+    """Returns a network policy instance, using SL or FFPI-2 parameters.
+    
+    Args:
+        algorithm: str in ['SL', 'FFPI2']"""
+
+    if algorithm=='SL':
         params = 'sl_params.npz'
-    else:
+    elif algorithm=='FPPI2':
         params = 'fppi2_params.npz'
+    else:
+        raise ValueError('Algorithm must be SL or FFPI2.')
     with open(os.path.join(file_path, params), 'rb') as f:
         provider = parameter_provider.ParameterProvider(f)
     
@@ -92,6 +175,8 @@ class RandomDisbandPolicy:
         # In all other phases, hold
         
         return [actions, {'values': None, 'policy': None, 'actions': None}] #fill out this shit later
+    
+
     
 class SmartDisbandPolicy:
     """Agent which disbands the units with fewest adjacent enemy units first."""
@@ -253,86 +338,10 @@ def run_experiment(policies, slots_to_policies, max_length=20):
         slots_to_policies = slots_to_policies,
         max_length = max_length
 )
+    logging.info('Policies: %s', policies)
     print('Trajectory', trajectory)
     print(trajectory.observations[-1].season)
 
 
 if __name__ == '__main__':
-
-
-    switch_after_10_turns = partial(switch_after_k_turns, k=10)
-    switch_after_20_turns = partial(switch_after_k_turns, k=20)
-    switch_after_5_supply_centers = partial(switch_after_k_supply_centers, k=5)
-
-
-    mixed_policy_1 = SwitchPolicy(get_network_policy_instance(), switch_after_10_turns, RandomDisbandPolicy(p=0.5))
-    mixed_policy_2 = SwitchPolicy(get_network_policy_instance(), switch_after_20_turns, RandomDisbandPolicy(p=0.5))
-    mixed_policy_3 = SwitchPolicy(get_network_policy_instance(), switch_after_5_supply_centers, RandomDisbandPolicy(p=0.5))
-
-    simultaneous_switch_after_10_turns = partial(simultaneous_switch_after_k_turns, k=10)
-    mixed_policy_4 = SimultaneousSwitchPolicy(get_network_policy_instance(), simultaneous_switch_after_10_turns, RandomDisbandPolicy(p=0.5))
-
-
-
-#     # Experiment 1
-#     print('Experiment 1')
-#     trajectory = run_experiment(
-#         policies = (mixed_policy_1, random_disband_policy),
-#         slots_to_policies = [0] + [1] * 6
-# )
-#     # Experiment 2
-#     print('Experiment 2')
-#     trajectory = run_experiment(
-#         policies = (mixed_policy_1, mixed_policy_2),
-#         slots_to_policies = [0] * 6 + [1],
-#         max_length=30
-# )
-#     # Experiment 3
-#     print('Experiment 3')
-#     trajectory = run_experiment(
-#         policies = (sl_policy,),
-#         slots_to_policies = [0] * 7,
-# )
-#     # Experiment 4
-#     print('Experiment 4')
-#     trajectory = run_experiment(
-#         policies = (mixed_policy_2,),
-#         slots_to_policies = [0]*7
-# )
-#     # Experiment 5
-#     print('Experiment 5')
-#     trajectory = run_experiment(
-#         policies = (mixed_policy_1,),
-#         slots_to_policies = [0] * 7 # + [1] * 6
-# )
-
-    # Experiment 6
-#     print('Experiment 6')
-#     trajectory = run_experiment(
-#         policies = (mixed_policy_2, mixed_policy_2, mixed_policy_2, mixed_policy_2, mixed_policy_2, mixed_policy_2, mixed_policy_2),
-#         slots_to_policies = list(range(7))
-# )
-
-    # Experiment 7
-    # print('Experiment 7')
-    # trajectory = run_experiment(
-    #     policies = (mixed_policy_1,),
-    #     slots_to_policies= [0] * 7,
-    #     max_length=20
-    # )
-    
-#     # Experiment 8
-#     print('Experiment 8')
-#     trajectory = run_experiment(
-#         policies = (mixed_policy_3,),
-#         slots_to_policies = [0] * 7,
-#         max_length=30
-# )
-
-    # Experiment 9
-    print('Experiment 9')
-    trajectory = run_experiment(
-        policies = (mixed_policy_4,),
-        slots_to_policies = [0] * 7,
-        max_length=30
-    )
+    main()
