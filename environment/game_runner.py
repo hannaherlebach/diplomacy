@@ -16,11 +16,15 @@
 """Play games of Diplomacy."""
 
 from typing import Any, Dict, List, Optional, Sequence
+import os
 
 from absl import logging
 import wandb
 import numpy as np
 import matplotlib.pyplot as plt
+import seaborn as sns
+from datetime import datetime
+
 
 from diplomacy.environment import action_utils
 from diplomacy.environment import observation_utils as utils
@@ -80,6 +84,7 @@ def run_game(
     forced_draw_probability=0.0,
     points_per_supply_centre=False,
     draw_if_slot_loses=None,
+    args=None
 ) -> DiplomacyTrajectory:
   """Run a game of diplomacy.
 
@@ -205,8 +210,37 @@ def run_game(
                      padded_legal_actions,
                      padded_actions,
                      policies_step_outputs)
+    
+  # Plotting
 
-  figures_to_plot = [('Supply Centers', supply_centers_history), ('Units', units_history)] #[supply_centers_history, units_history, unbuilt_units_history, build_numbers_history, welfare_points_history]
+  # Create folder name using timestamp and args
+  timestamp_str = datetime.now().strftime("%Y%m%d-%H%M%S")
+  if args:
+    folder_name = "_".join(f"{key}={value}" for key, value in args.__dict__.items() if value is not None)
+  else:
+    folder_name = f"figre_{timestamp_str}"
+
+# Create the folder if it doesn't exist
+  if not os.path.exists(folder_name):
+      os.makedirs(folder_name)
+
+  # Plotting
+  sns.set_palette('colorblind')
+
+  # Add Total to supply centres history
+  total_supply_centers_history = [sum(supply_centers_history[power_name][i] for power_name in state.powers.keys()) for i in range(len(supply_centers_history['AUSTRIA']))]
+  supply_centers_history['Total'] = total_supply_centers_history
+
+  # Add Total to units history
+  total_units_history = [sum(units_history[power_name][i] for power_name in state.powers.keys()) for i in range(len(units_history['AUSTRIA']))]
+  units_history['Total'] = total_units_history
+
+  # Add Total to welfare points history
+  total_welfare_points_history = [sum(welfare_points_history[power_name][i] for power_name in state.powers.keys()) for i in range(len(welfare_points_history['AUSTRIA']))]
+  welfare_points_history['Total'] = total_welfare_points_history
+
+  figures_to_plot = [('Welfare Points', welfare_points_history), ('Supply Centers', supply_centers_history), ('Units', units_history)] #[supply_centers_history, units_history, unbuilt_units_history, build_numbers_history, welfare_points_history]
+
 
   for figure_name, figure in figures_to_plot:
     plt.figure()
@@ -216,6 +250,11 @@ def run_game(
     plt.title(figure_name)
     plt.xlabel("Turn")
     plt.ylabel(figure_name)
+
+    # Save the figure to the new folder
+    filename = os.path.join(folder_name, f"{figure_name.replace(' ', '_')}_{timestamp_str}.png")
+    plt.savefig(filename)
+
     plt.show()
 
   if returns is None:

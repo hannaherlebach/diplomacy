@@ -68,12 +68,13 @@ def main():
 
     # Putting it all together
     policies = tuple([SwitchPolicy(network_policies[i], switch_conditions[i], disband_policies[i]) for i in range(num_policies)])
-    
+
     # Run experiment
     trajectory = run_experiment(
         policies=policies,
         slots_to_policies=args.slots_list,
-        max_length=args.max_length
+        max_length=args.max_length,
+        args=args
     )
 
 def parse_args():
@@ -328,7 +329,7 @@ class SimultaneousSwitchPolicy:
         self.hard_coded_policy.reset()
 
 
-def run_experiment(policies, slots_to_policies, max_length=20):
+def run_experiment(policies, slots_to_policies, max_length=20, args=None):
     """Runs the chosen set of policies on Welfare Diplomacy."""
     game_instance = diplomacy_state.BaselineGame() # defo cursed
     initial_state = diplomacy_state.WelfareDiplomacyState(game_instance)
@@ -336,7 +337,8 @@ def run_experiment(policies, slots_to_policies, max_length=20):
         state = initial_state,
         policies = policies,
         slots_to_policies = slots_to_policies,
-        max_length = max_length
+        max_length = max_length,
+        args=args
 )
     logging.info('Policies: %s', policies)
     print('Trajectory', trajectory)
