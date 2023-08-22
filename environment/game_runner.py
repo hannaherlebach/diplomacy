@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Optional, Sequence
 import os
 
 from absl import logging
+from tqdm import tqdm
 import wandb
 import numpy as np
 import matplotlib.pyplot as plt
@@ -136,7 +137,9 @@ def run_game(
   build_numbers_history = {power_name: [] for power_name in state.powers.keys()}
   welfare_points_history = {power_name: [] for power_name in state.powers.keys()}
 
-  while not state.is_terminal() and turn_num < max_length:
+  for turn_num in tqdm(range(max_length)):
+    if state.is_terminal():
+      break
     logging.info("In turn %d year %d ", turn_num, year)
     
     # For plots
@@ -221,8 +224,9 @@ def run_game(
     folder_name = f"figre_{timestamp_str}"
 
 # Create the folder if it doesn't exist
-  if not os.path.exists(folder_name):
-      os.makedirs(folder_name)
+  folder_path = os.path.join('/Users/hannaherlebach/research/welfare_diplomacy_figures', folder_name)
+  if not os.path.exists(folder_path):
+      os.makedirs(folder_path)
 
   # Plotting
   sns.set_palette('colorblind')
@@ -252,10 +256,10 @@ def run_game(
     plt.ylabel(figure_name)
 
     # Save the figure to the new folder
-    filename = os.path.join(folder_name, f"{figure_name.replace(' ', '_')}_{timestamp_str}.png")
+    filename = os.path.join(folder_path, f"{figure_name.replace(' ', '_')}_{timestamp_str}.png")
     plt.savefig(filename)
 
-    #plt.show()
+    plt.show()
 
   if returns is None:
     returns = state.returns()

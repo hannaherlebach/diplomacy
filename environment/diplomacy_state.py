@@ -23,6 +23,11 @@ from collections import OrderedDict
 from environment import observation_utils as utils
 from environment import mila_actions
 
+# To get around hyphen in welare-diplomacy
+import sys
+sys.path.append('/Users/hannaherlebach/research/welfare_diplomacy_baselines/welfare-diplomacy')
+from diplomacy.engine.game import Game
+
 class DiplomacyState(typing_extensions.Protocol):
   """Diplomacy State protocol."""
 
@@ -60,8 +65,6 @@ class DiplomacyState(typing_extensions.Protocol):
     pass
 
 # --- MY CODE BELOW --- #
-
-from welfare_diplomacy.engine.game import Game
 
 # Create a subclass of Game for baselines to play, using the standard_welfare map but using legal actions from the standard map.
 

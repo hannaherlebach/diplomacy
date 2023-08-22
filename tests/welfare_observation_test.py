@@ -17,7 +17,10 @@ from network import parameter_provider
 
 import tests.observation_test as observation_test
 
-from welfare_diplomacy.engine.game import Game
+# To get around hyphen in welare-diplomacy
+import sys
+sys.path.append('/Users/hannaherlebach/research/welfare_diplomacy_baselines/welfare-diplomacy')
+from diplomacy.engine.game import Game
 
 SL = True
 file_path = '/Users/hannaherlebach/research/diplomacy_parameters/'

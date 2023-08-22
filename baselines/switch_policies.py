@@ -15,8 +15,10 @@ from environment import observation_utils as utils
 from environment import mila_actions
 from environment import action_utils
 
-# Change
-from welfare_diplomacy.engine.map import Map
+# To get around hyphen in welare-diplomacy
+import sys
+sys.path.append('/Users/hannaherlebach/research/welfare_diplomacy_baselines/welfare-diplomacy')
+from diplomacy.engine.map import Map
 
 logging.basicConfig(filename='switch_policies.log', filemode='a', level=logging.INFO)
 
@@ -85,10 +87,10 @@ def parse_args():
     # Arguments are None if not set in command line. Args need to be set with 0, 1 or num_policies elements. If an arg has length 1 but num_policies > 1, it is assumed that all policies take the same arg value.
     parser.add_argument("--max_length", type=int, default=30, help="Maximum number of game steps.")
     parser.add_argument('--num_policies', type=int, default=1, help='Number of different policies.')
-    parser.add_argument('--switch_after_turns', type=int, nargs='*', help='Number of turns after which to switch')
+    parser.add_argument('--switch_after_turns', type=int, default=[10], nargs='*', help='Number of turns after which to switch')
     parser.add_argument('--switch_after_supply_centers', type=int, nargs='*', help='Number of supply centers after which to switch')
-    parser.add_argument('--random_disband', type=float, nargs='*', help='Probability for RandomDisbandPolicy')
-    parser.add_argument('--network_algorithm', type=str, nargs='+', default='SL', choices=['SL', 'FPPI2'], help='Learning algorithm used to get network policy parameters.')
+    parser.add_argument('--random_disband', type=float, default=[0.5], nargs='*', help='Probability for RandomDisbandPolicy')
+    parser.add_argument('--network_algorithm', type=str, nargs='+', default=['SL'], choices=['SL', 'FPPI2'], help='Learning algorithm used to get network policy parameters.')
     parser.add_argument('--slots_list', type=int, nargs=7, default=[0]*7, help='Mapping from policies to slots (powers). A list of length 7 with elements taking values up to num_policies.')
 
     args = parser.parse_args()

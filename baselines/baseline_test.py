@@ -9,7 +9,10 @@ from environment import diplomacy_state
 from environment import game_runner
 from environment import observation_utils as utils
 
-from welfare_diplomacy.engine.game import Game
+# To get around hyphen in welare-diplomacy
+import sys
+sys.path.append('/Users/hannaherlebach/research/welfare_diplomacy_baselines/welfare-diplomacy')
+from diplomacy.engine.game import Game
 
 class WelfareDiplomacyGameRunner:
     """Runs the provided DeepMind agents on a game of Welfare Diplomacy."""
