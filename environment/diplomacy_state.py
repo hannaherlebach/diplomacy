@@ -20,14 +20,8 @@ import numpy as np
 import typing_extensions
 from collections import OrderedDict
 
-# For debugging
-# import sys
-# sys.path.append('/Users/hannaherlebach/research')
-
-from diplomacy.environment import observation_utils as utils
-from diplomacy.environment import mila_actions
-from diplomacy.environment import human_readable_actions
-
+from environment import observation_utils as utils
+from environment import mila_actions
 
 class DiplomacyState(typing_extensions.Protocol):
   """Diplomacy State protocol."""

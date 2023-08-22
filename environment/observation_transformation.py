@@ -24,10 +24,10 @@ import jax.numpy as jnp
 import numpy as np
 import tree
 
-from diplomacy.environment import action_utils
-from diplomacy.environment import observation_utils as utils
-from diplomacy.environment import province_order
-from diplomacy.environment import tree_utils
+from environment import action_utils
+from environment import observation_utils as utils
+from environment import province_order
+from environment import tree_utils
 
 
 class ObservationTransformState(NamedTuple):

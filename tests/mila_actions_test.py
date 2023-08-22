@@ -17,10 +17,10 @@
 import collections
 
 from absl.testing import absltest
-from diplomacy.environment import action_list
-from diplomacy.environment import action_utils
-from diplomacy.environment import human_readable_actions
-from diplomacy.environment import mila_actions
+from environment import action_list
+from environment import action_utils
+from environment import human_readable_actions
+from environment import mila_actions
 
 
 class MilaActionsTest(absltest.TestCase):

@@ -6,15 +6,16 @@ from functools import partial
 import logging
 import argparse
 
-from diplomacy.network import config
-from diplomacy.network import network_policy
-from diplomacy.network import parameter_provider
-from diplomacy.environment import diplomacy_state
-from diplomacy.environment import game_runner
-from diplomacy.environment import observation_utils as utils
-from diplomacy.environment import mila_actions
-from diplomacy.environment import action_utils
+from network import config
+from network import network_policy
+from network import parameter_provider
+from environment import diplomacy_state
+from environment import game_runner
+from environment import observation_utils as utils
+from environment import mila_actions
+from environment import action_utils
 
+# Change
 from welfare_diplomacy.engine.map import Map
 
 logging.basicConfig(filename='switch_policies.log', filemode='a', level=logging.INFO)

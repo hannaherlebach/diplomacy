@@ -8,14 +8,14 @@ import numpy as np
 import tree
 import dill
 
-from diplomacy.environment import diplomacy_state
-from diplomacy.environment import game_runner
-from diplomacy.environment import observation_utils as utils
-from diplomacy.network import config
-from diplomacy.network import network_policy
-from diplomacy.network import parameter_provider
+from environment import diplomacy_state
+from environment import game_runner
+from environment import observation_utils as utils
+from network import config
+from network import network_policy
+from network import parameter_provider
 
-import diplomacy.tests.observation_test as observation_test
+import tests.observation_test as observation_test
 
 from welfare_diplomacy.engine.game import Game
 

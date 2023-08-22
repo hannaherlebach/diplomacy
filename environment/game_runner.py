@@ -26,11 +26,11 @@ import seaborn as sns
 from datetime import datetime
 
 
-from diplomacy.environment import action_utils
-from diplomacy.environment import observation_utils as utils
-from diplomacy.network import network_policy
-from diplomacy.environment import mila_actions
-from diplomacy.environment import human_readable_actions
+from environment import action_utils
+from environment import observation_utils as utils
+from network import network_policy
+from environment import mila_actions
+from environment import human_readable_actions
 
 logging.set_verbosity(logging.INFO)
 
@@ -255,7 +255,7 @@ def run_game(
     filename = os.path.join(folder_name, f"{figure_name.replace(' ', '_')}_{timestamp_str}.png")
     plt.savefig(filename)
 
-    plt.show()
+    #plt.show()
 
   if returns is None:
     returns = state.returns()

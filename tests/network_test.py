@@ -23,10 +23,10 @@ import numpy as np
 import optax
 import tree
 
-from diplomacy.environment import action_utils
-from diplomacy.environment import observation_utils as utils
-from diplomacy.environment import province_order
-from diplomacy.network import network
+from environment import action_utils
+from environment import observation_utils as utils
+from environment import province_order
+from network import network
 
 
 def _random_adjacency_matrix(num_nodes: int) -> np.ndarray:

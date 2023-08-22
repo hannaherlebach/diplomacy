@@ -7,7 +7,7 @@ import argparse
 import numpy as np
 from functools import partial
 
-from diplomacy.baselines import switch_policies as sp
+from baselines import switch_policies as sp
 
 def main():
     args = parse_args()

@@ -17,8 +17,8 @@
 
 from ml_collections import config_dict
 
-from diplomacy.environment import province_order
-from diplomacy.network import network
+from environment import province_order
+from network import network
 
 
 def get_config() -> config_dict.ConfigDict:
