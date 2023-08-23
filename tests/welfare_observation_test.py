@@ -17,10 +17,7 @@ from network import parameter_provider
 
 import tests.observation_test as observation_test
 
-from welfare_diplomacy.engine.game import Game
-
-SL = True
-file_path = '/Users/hannaherlebach/research/diplomacy_parameters/'
+from diplomacy.engine.game import Game
 
 # Create game instance
 game = Game(map_name='standard_welfare')

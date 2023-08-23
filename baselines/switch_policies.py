@@ -1,6 +1,5 @@
+"""Combines network policies, switch conditions and hard-coded disband policies to create modular policies for playing Welfare Diplomacy."""
 import os
-import wandb
-#from tqdm import tqdm
 import numpy as np
 from functools import partial
 import logging
@@ -15,15 +14,13 @@ from environment import observation_utils as utils
 from environment import mila_actions
 from environment import action_utils
 
-# Change
-from welfare_diplomacy.engine.map import Map
+from diplomacy.engine.map import Map
 
 logging.basicConfig(filename='switch_policies.log', filemode='a', level=logging.INFO)
 
 welfare_map = Map('standard_welfare')
 
 _MILA_TO_DM_TAG_MAP = {v: k for k, v in mila_actions._DM_TO_MILA_TAG_MAP.items()}
-
 
 
 def main():
@@ -79,10 +76,10 @@ def main():
     )
 
 def parse_args():
-    """Parse command-line arguments."""
+    """Parse command-line arguments.
+    
+    Arguments are None if not set in command line. Args need to be set with 0, 1 or num_policies elements. If an arg has length 1 but num_policies > 1, it is assumed that all policies take the same arg value."""
     parser = argparse.ArgumentParser(description='Run a game of Welfare Diplomacy.')
-
-    # Arguments are None if not set in command line. Args need to be set with 0, 1 or num_policies elements. If an arg has length 1 but num_policies > 1, it is assumed that all policies take the same arg value.
     parser.add_argument("--max_length", type=int, default=30, help="Maximum number of game steps.")
     parser.add_argument('--num_policies', type=int, default=1, help='Number of different policies.')
     parser.add_argument('--switch_after_turns', type=int, nargs='*', help='Number of turns after which to switch')
@@ -179,7 +176,7 @@ class RandomDisbandPolicy:
         return [actions, {'values': None, 'policy': None, 'actions': None}] #fill out this shit later
     
 
-    
+# Unfinished
 class SmartDisbandPolicy:
     """Agent which disbands the units with fewest adjacent enemy units first."""
     def __init__(self, num_to_disband):
@@ -334,7 +331,7 @@ def run_experiment(policies, slots_to_policies, max_length=20, args=None):
     """Runs the chosen set of policies on Welfare Diplomacy.
     
     Returns the trajectory of the game."""
-    game_instance = diplomacy_state.BaselineGame() # defo cursed
+    game_instance = diplomacy_state.WelfareGame()
     initial_state = diplomacy_state.WelfareDiplomacyState(game_instance)
     trajectory = game_runner.run_game(
         state = initial_state,

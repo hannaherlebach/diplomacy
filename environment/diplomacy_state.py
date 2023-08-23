@@ -23,6 +23,8 @@ from collections import OrderedDict
 from environment import observation_utils as utils
 from environment import mila_actions
 
+from diplomacy.engine.game import Game
+
 class DiplomacyState(typing_extensions.Protocol):
   """Diplomacy State protocol."""
 
@@ -59,37 +61,20 @@ class DiplomacyState(typing_extensions.Protocol):
     """
     pass
 
-# --- MY CODE BELOW --- #
+class WelfareGame(Game):
+    """Game based on the standard_welfare map, but using legal actions from the standard map (which is what the network policies expect)."""
 
-from welfare_diplomacy.engine.game import Game
-
-# Create a subclass of Game for baselines to play, using the standard_welfare map but using legal actions from the standard map.
-
-# This is a kinda dumb way to do it (just copied in the get_all_possible_orders() method and removed "if self.welfare", bc I can't set the attribute self.welfare); could also go in and edit welfare_diplomacy.engine.game, but let's just do this for now.
-
-class BaselineGame(Game):
     def __init__(self):
         super().__init__(map_name='standard_welfare')
 
     def get_all_possible_orders(self):
-        """Computes a list of all possible orders for all locations, but I've removed any mention of welfare.
+        """Same as get_all_possible_orders with welfare=False. (Not ideal; would prefer somehow to set welfare=False for super().get_all_possible_orders() and then back to True.)
 
-        :return: A dictionary with locations as keys, and their respective list of possible orders as values
+        returns:
+            A dictionary with locations as keys, and their respective list of possible orders as values
         """
-        # Would ideally do:
+        # 
 
-        # original_welfare = self.welfare
-
-        # # Temporarily set welfare to False
-        # self.welfare = False
-        # orders = super().get_all_possible_orders()
-
-        # # Resore welfare
-        # self.welfare = original_welfare
-
-        # return orders
-
-        # Instead do:
         assert self.map is not None
         # pylint: disable=too-many-branches,too-many-nested-blocks
         possible_orders = {loc.upper(): set() for loc in self.map.locs}
@@ -328,12 +313,10 @@ class BaselineGame(Game):
 
 class WelfareDiplomacyState(DiplomacyState):
   
-    def __init__(self, game: BaselineGame):
+    def __init__(self, game: WelfareGame):
         self.game = game
-        print('Map name from inside WelfareDiplomacyState', game.map_name)
 
-        # Get a sorted list of power tuples of form 'power name: power instance'
-        # game.powers is a dict of form {'FRANCE': FrancePower, ...}
+        # Get a dictionary of power.name: power, ordered by power name
         power_names_sorted = sorted(game.powers.keys())
         self.powers = OrderedDict((name, game.powers[name]) for name in power_names_sorted)
 
@@ -346,50 +329,45 @@ class WelfareDiplomacyState(DiplomacyState):
         return self.game.is_game_done
     
     def observation(self) -> utils.Observation:
-        """ Gets a utils.Observation namedtuple."""
+        """ Gets a utils.Observation namedtuple.
+        
+        Returns:
+            utils.Observation(
+                season: utils.Season,
+                board: np.array shape (81, 35),
+                build_numbers: np.array shape (7,),
+                last_actions: list of actions (integers
+            )
+            """
 
         game = self.game
         powers = self.powers
 
-        # SEASON: utils.Season
-
-        # DeepMind <-> MILA conversions:
-        # ? = NEWYEAR
-        # SPRING_MOVES = SPRING MOVEMENT
-        # SPRING_RETREATS = SPRING RETREATS3
-        # AUTUMN_MOVES = FALL MOVEMENT
-        # AUTUMN_RETREATS = FALL RETREATS
-        # BUILDS = WINTER ADJUSTMENT
+        # SEASON
         
-        # To do: figure out the NEWYEAR phase
-
         # game.phase: string containing long rep of current phase
-        if 'SPRING' in game.phase:
+        if 'SPRING' in game.phase: 
             season = 'SPRING'
         elif 'FALL' in game.phase:
             season = 'AUTUMN'
         elif 'WINTER' in game.phase:
+            # MILA calls 'BUILDS' phase 'WINTER ADJUSTMENT'
             season = 'BUILDS'
         else:
-            raise ValueError('not a season')
+            raise ValueError('Not a valid season.')
 
         # game.phase_type: 'M' for Movement, 'R' for Retreats, 'A' for Adjustment, '-' for non-playing
         if 'M' in game.phase_type:
             season = getattr(utils.Season, season + '_MOVES')
-            type = 'MOVES'
         elif 'R' in game.phase_type:
             season = getattr(utils.Season, season + '_RETREATS')
-            type = 'RETREATS'
         elif 'A' in game.phase_type:
             season = getattr(utils.Season, season)
         else:
-            raise ValueError('not a season')
-        # (could make this cleaner)
+            raise ValueError('Not a valid phase type.')
         
         
         # BOARD STATE & BUILD NUMBERS
-        # Board: np.array shape (81, 35)
-        # Build numbers: np.array shape (7,)
  
         supply_centers = game.map.scs # tags
         supply_centers_owned = set()
@@ -547,7 +525,8 @@ class WelfareDiplomacyState(DiplomacyState):
             axis=1)
 
         # LAST ACTIONS
-        # Using the step method
+
+        # Using the arg for the step() method
         if self._last_actions:
             last_actions = [action for power in self._last_actions for action in power]
         else:
@@ -556,6 +535,8 @@ class WelfareDiplomacyState(DiplomacyState):
         return utils.Observation(season, board, build_numbers, last_actions)
     
     def legal_actions(self) -> Sequence[Sequence[int]]:
+        """Returns a list of legal actions for each power."""
+        
         game = self.game
         powers = self.powers
         self.mila_legal_orders = []
@@ -591,7 +572,6 @@ class WelfareDiplomacyState(DiplomacyState):
                             possible_orders_by_power[power] += orders
         # Note: these orders are still in string form.
 
-
         # Store orders by power in MILA format for use in step() method
         orders_by_power_list = [possible_orders_by_power[power] for _, power in sorted(powers.items())]
         self.mila_legal_orders = orders_by_power_list
@@ -619,14 +599,17 @@ class WelfareDiplomacyState(DiplomacyState):
     def returns(self) -> np.ndarray:
         """The returns of the game, equal to welfare points.
         
-        Could also set to all 0 while the game is still in progress, but doesn't make a difference."""
+        (Could also set to all 0 while the game is still in progress.)"""
 
         welfare_points = [power.welfare_points for power in self.powers.values()]
         return np.array(welfare_points)
         
     
     def step(self, actions_per_player: Sequence[Sequence[int]]) -> None:
-        # actions_per_player are given as 64-bit integers
+        """Steps the environment forward a full phase of Diplomacy.
+        
+        Args:
+            actions_per_player: a list of lists of 64-bit integers corresponding to actions."""
         
         game = self.game
         powers = self.powers
