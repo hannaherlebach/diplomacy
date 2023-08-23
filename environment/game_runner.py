@@ -74,6 +74,11 @@ def _draw_returns(
         1 if utils.sc_provinces(i, board) else 0 for i in range(num_players)]
   return np.array(returns, dtype=np.float32) / sum(returns)
 
+def nash_social_welfare(payoffs: Sequence[int]):
+  welfare = 1
+  for payoff in payoffs:
+    welfare *= payoff
+  return welfare ** (1/len(payoffs))
 
 def run_game(
     state,
@@ -236,8 +241,12 @@ def run_game(
   units_history['Total'] = total_units_history
 
   # Add Total to welfare points history
-  total_welfare_points_history = [sum(welfare_points_history[power_name][i] for power_name in state.powers.keys()) for i in range(len(welfare_points_history['AUSTRIA']))]
-  welfare_points_history['Total'] = total_welfare_points_history
+  # total_welfare_points_history = [sum(welfare_points_history[power_name][i] for power_name in state.powers.keys()) for i in range(len(welfare_points_history['AUSTRIA']))]
+  # welfare_points_history['Total'] = total_welfare_points_history
+
+  # Add Nash Social Welfare to welfare points history
+  nash_social_welfare_history = [nash_social_welfare([welfare_points_history[power_name][i] for power_name in state.powers.keys()]) for i in range(len(welfare_points_history['AUSTRIA']))]
+  welfare_points_history['Nash Social Welfare'] = nash_social_welfare_history
 
   figures_to_plot = [('Welfare Points', welfare_points_history), ('Supply Centers', supply_centers_history), ('Units', units_history)] #[supply_centers_history, units_history, unbuilt_units_history, build_numbers_history, welfare_points_history]
 
