@@ -223,11 +223,12 @@ def run_game(
   if args:
     folder_name = "_".join(f"{key}={value}" for key, value in args.__dict__.items() if value is not None)
   else:
-    folder_name = f"figre_{timestamp_str}"
+    folder_name = f"figure_{timestamp_str}"
 
 # Create the folder if it doesn't exist
-  if not os.path.exists(folder_name):
-      os.makedirs(folder_name)
+  folder_path = os.path.join('/Users/hannaherlebach/research/welfare_diplomacy_figures', folder_name)
+  if not os.path.exists(folder_path):
+      os.makedirs(folder_path)
 
   # Plotting
   sns.set_palette('colorblind')
@@ -241,14 +242,14 @@ def run_game(
   units_history['Total'] = total_units_history
 
   # Add Total to welfare points history
-  # total_welfare_points_history = [sum(welfare_points_history[power_name][i] for power_name in state.powers.keys()) for i in range(len(welfare_points_history['AUSTRIA']))]
-  # welfare_points_history['Total'] = total_welfare_points_history
+  total_welfare_points_history = [sum(welfare_points_history[power_name][i] for power_name in state.powers.keys()) for i in range(len(welfare_points_history['AUSTRIA']))]
+  welfare_points_history['Total'] = total_welfare_points_history
 
   # Add Nash Social Welfare to welfare points history
-  nash_social_welfare_history = [nash_social_welfare([welfare_points_history[power_name][i] for power_name in state.powers.keys()]) for i in range(len(welfare_points_history['AUSTRIA']))]
-  welfare_points_history['Nash Social Welfare'] = nash_social_welfare_history
+  # nash_social_welfare_history = [nash_social_welfare([welfare_points_history[power_name][i] for power_name in state.powers.keys()]) for i in range(len(welfare_points_history['AUSTRIA']))]
+  # welfare_points_history['Nash Social Welfare'] = nash_social_welfare_history
 
-  figures_to_plot = [('Welfare Points', welfare_points_history), ('Supply Centers', supply_centers_history), ('Units', units_history)] #[supply_centers_history, units_history, unbuilt_units_history, build_numbers_history, welfare_points_history]
+  figures_to_plot = [('Welfare Points', welfare_points_history), ('Supply Centers', supply_centers_history), ('Units', units_history)]
 
 
   for figure_name, figure in figures_to_plot:
@@ -261,10 +262,10 @@ def run_game(
     plt.ylabel(figure_name)
 
     # Save the figure to the new folder
-    filename = os.path.join(folder_name, f"{figure_name.replace(' ', '_')}_{timestamp_str}.png")
+    filename = os.path.join(folder_path, f"{figure_name.replace(' ', '_')}_{timestamp_str}.png")
     plt.savefig(filename)
 
-    #plt.show()
+    # plt.show()
 
   if returns is None:
     returns = state.returns()

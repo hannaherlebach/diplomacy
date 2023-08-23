@@ -16,7 +16,7 @@ from environment import action_utils
 
 from diplomacy.engine.map import Map
 
-logging.basicConfig(filename='switch_policies.log', filemode='a', level=logging.INFO)
+# logging.basicConfig(filename='switch_policies.log', filemode='a', level=logging.INFO)
 
 welfare_map = Map('standard_welfare')
 
@@ -82,10 +82,10 @@ def parse_args():
     parser = argparse.ArgumentParser(description='Run a game of Welfare Diplomacy.')
     parser.add_argument("--max_length", type=int, default=30, help="Maximum number of game steps.")
     parser.add_argument('--num_policies', type=int, default=1, help='Number of different policies.')
-    parser.add_argument('--switch_after_turns', type=int, nargs='*', help='Number of turns after which to switch')
-    parser.add_argument('--switch_after_supply_centers', type=int, nargs='*', help='Number of supply centers after which to switch')
-    parser.add_argument('--random_disband', type=float, nargs='*', help='Probability for RandomDisbandPolicy')
-    parser.add_argument('--network_algorithm', type=str, nargs='+', default='SL', choices=['SL', 'FPPI2'], help='Learning algorithm used to get network policy parameters.')
+    parser.add_argument('--switch_after_turns', type=int, default=[10], nargs='*', help='Number of turns after which to switch')
+    parser.add_argument('--switch_after_supply_centers', type=int, default=[5], nargs='*', help='Number of supply centers after which to switch')
+    parser.add_argument('--random_disband', type=float, default=[0.5], nargs='*', help='Probability for RandomDisbandPolicy')
+    parser.add_argument('--network_algorithm', type=str, nargs='+', default=['SL'], choices=['SL', 'FPPI2'], help='Learning algorithm used to get network policy parameters.')
     parser.add_argument('--slots_list', type=int, nargs=7, default=[0]*7, help='Mapping from policies to slots (powers). A list of length 7 with elements taking values up to num_policies.')
 
     args = parser.parse_args()
