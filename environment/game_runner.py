@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Optional, Sequence
 import os
 
 from absl import logging
+from tqdm import tqdm
 import wandb
 import numpy as np
 import matplotlib.pyplot as plt
@@ -26,11 +27,9 @@ import seaborn as sns
 from datetime import datetime
 
 
-from environment import action_utils
+from environment import action_utils, mila_actions
 from environment import observation_utils as utils
 from network import network_policy
-from environment import mila_actions
-from environment import human_readable_actions
 
 logging.set_verbosity(logging.INFO)
 
@@ -111,6 +110,9 @@ def run_game(
   """
   num_players = 7
 
+  # # For experiment
+  # focal_players = [i for i, slot in enumerate(slots_to_policies) if slot==1]
+
   if len(slots_to_policies) != num_players:
     raise ValueError(
         f"Length of slot to policy mapping {len(slots_to_policies)}"
@@ -135,87 +137,92 @@ def run_game(
   returns = None
 
   # For plots
-  supply_centers_history = {power_name: [] for power_name in state.powers.keys()}
-  units_history = {power_name: [] for power_name in state.powers.keys()}
-  unbuilt_units_history = {power_name: [] for power_name in state.powers.keys()}
-  build_numbers_history = {power_name: [] for power_name in state.powers.keys()}
-  welfare_points_history = {power_name: [] for power_name in state.powers.keys()}
+  # supply_centers_history = {power_name: [] for power_name in state.powers.keys()}
+  # units_history = {power_name: [] for power_name in state.powers.keys()}
+  # unbuilt_units_history = {power_name: [] for power_name in state.powers.keys()}
+  # build_numbers_history = {power_name: [] for power_name in state.powers.keys()}
+  # welfare_points_history = {power_name: [] for power_name in state.powers.keys()}
 
-  while not state.is_terminal() and turn_num < max_length:
-    logging.info("In turn %d year %d ", turn_num, year)
-    
-    # For plots
-    for i, (power_name, power) in enumerate(state.powers.items()):
-        supply_centers_history[power_name].append(len(power.centers))
-        units_history[power_name].append(len(power.units))
-        unbuilt_units_history[power_name].append(len(power.centers)-len(power.units))
-        build_numbers_history[power_name].append(state.observation().build_numbers[i])
-        welfare_points_history[power_name].append(power.welfare_points)
+  for turn_num in tqdm(range(max_length)):
+    if not state.is_terminal():
+      #logging.info("In turn %d year %d ", turn_num, year)
+      
+      # For plots
+      # for i, (power_name, power) in enumerate(state.powers.items()):
+      #     supply_centers_history[power_name].append(len(power.centers))
+      #     units_history[power_name].append(len(power.units))
+      #     unbuilt_units_history[power_name].append(len(power.centers)-len(power.units))
+      #     build_numbers_history[power_name].append(state.observation().build_numbers[i])
+      #     welfare_points_history[power_name].append(power.welfare_points)
 
-    # wandb overkill?
-    if wandb.run is not None: 
-      for power_name, power in state.powers.items():
-        log_data = {
-            f'{power_name}/units': len(power.units),
-            f'{power_name}/supply_centers': len(power.centers),
-        }
-        wandb.log(log_data, step=turn_num)
+      # wandb overkill?
+      if wandb.run is not None: 
+        for power_name, power in state.powers.items():
+          log_data = {
+              f'{power_name}/units': len(power.units),
+              f'{power_name}/supply_centers': len(power.centers),
+          }
+          wandb.log(log_data, step=turn_num)
 
-    print("Welfare points", [power.welfare_points for power in state.powers.values()])
-    print("Num SCs", [len(power.centers) for power in state.powers.values()])
-    print("Num units", [len(power.units) for power in state.powers.values()])
+      #print('Focal units', len(state.power.values()[focal_players[0]].units))
+      # print("Welfare points", [power.welfare_points for power in state.powers.values()])
+      # print("Num SCs", [len(power.centers) for power in state.powers.values()])
+      # print("Num units", [len(power.units) for power in state.powers.values()])
 
-    observation = state.observation()
+      observation = state.observation()
 
-    # New Game Year Checks
-    if observation.season == utils.Season.SPRING_MOVES:
-      year += 1
-      if (draw_if_slot_loses is not None and
-          not utils.sc_provinces(draw_if_slot_loses, observation.board)):
-        returns = _draw_returns(points_per_supply_centre, observation.board,
-                                num_players)
-        logging.info("Forcing a draw due to elimination - returns %s",
-                     returns)
-        break
-      if (year > min_years_forced_draw and
-          np.random.uniform() < forced_draw_probability):
-        returns = _draw_returns(points_per_supply_centre, observation.board,
-                                num_players)
-        logging.info("Forcing a draw at year %s - returns %s", year, returns)
-        break
+      # New Game Year Checks
+      if observation.season == utils.Season.SPRING_MOVES:
+        year += 1
+        if (draw_if_slot_loses is not None and
+            not utils.sc_provinces(draw_if_slot_loses, observation.board)):
+          returns = _draw_returns(points_per_supply_centre, observation.board,
+                                  num_players)
+          logging.info("Forcing a draw due to elimination - returns %s",
+                      returns)
+          break
+        if (year > min_years_forced_draw and
+            np.random.uniform() < forced_draw_probability):
+          returns = _draw_returns(points_per_supply_centre, observation.board,
+                                  num_players)
+          logging.info("Forcing a draw at year %s - returns %s", year, returns)
+          break
 
-    legal_actions = state.legal_actions()
-    padded_legal_actions = np.zeros(
-        (num_players, action_utils.MAX_LEGAL_ACTIONS), np.int64)
-    for i in range(num_players):
-      padded_legal_actions[i, :len(legal_actions[i])] = legal_actions[i]
-    actions_lists = [[] for _ in range(num_players)]
-    policies_step_outputs = {}
+      legal_actions = state.legal_actions()
+      padded_legal_actions = np.zeros(
+          (num_players, action_utils.MAX_LEGAL_ACTIONS), np.int64)
+      for i in range(num_players):
+        padded_legal_actions[i, :len(legal_actions[i])] = legal_actions[i]
+      actions_lists = [[] for _ in range(num_players)]
+      policies_step_outputs = {}
 
-    for policy, slots_list in zip(policies, policies_to_slots_lists):
-      (policy_actions_lists,
-       policies_step_outputs[str(policy)]) = policy.actions(
-           slots_list, observation, legal_actions)
-      if len(policy_actions_lists) != len(slots_list):
-        raise ValueError(f"Policy {policy} returned {len(policy_actions_lists)}"
-                         f" actions lists for {len(slots_list)} players")
-      for actions, slot in zip(policy_actions_lists, slots_list):
-        actions_lists[slot] = actions
-    # Save our actions lists.
-    padded_actions = np.full(
-        (num_players, action_utils.MAX_ORDERS), -1, np.int64)
-    for i, actions_list in enumerate(actions_lists):
-      if actions_list is not None:
-        padded_actions[i, :len(actions_list)] = actions_list
+      for policy, slots_list in zip(policies, policies_to_slots_lists):
+        (policy_actions_lists,
+        policies_step_outputs[str(policy)]) = policy.actions(
+            slots_list, observation, legal_actions)
+        if len(policy_actions_lists) != len(slots_list):
+          raise ValueError(f"Policy {policy} returned {len(policy_actions_lists)}"
+                          f" actions lists for {len(slots_list)} players")
+        for actions, slot in zip(policy_actions_lists, slots_list):
+          actions_lists[slot] = actions
+      # Save our actions lists.
+      padded_actions = np.full(
+          (num_players, action_utils.MAX_ORDERS), -1, np.int64)
+      for i, actions_list in enumerate(actions_lists):
+        if actions_list is not None:
+          padded_actions[i, :len(actions_list)] = actions_list
 
-    state.step(actions_lists)
-    turn_num += 1
+      state.step(actions_lists)
+      turn_num += 1
 
-    traj.append_step(observation,
-                     padded_legal_actions,
-                     padded_actions,
-                     policies_step_outputs)
-    
+      traj.append_step(observation,
+                      padded_legal_actions,
+                      padded_actions,
+                      policies_step_outputs)
+      
+  if state.is_terminal():
+    print('Game terminated after {} turns'.format(turn_num))
+      
   # Plotting
 
   # Create folder name using timestamp and args
@@ -231,41 +238,41 @@ def run_game(
       os.makedirs(folder_path)
 
   # Plotting
-  sns.set_palette('colorblind')
+  # sns.set_palette('colorblind')
 
-  # Add Total to supply centres history
-  total_supply_centers_history = [sum(supply_centers_history[power_name][i] for power_name in state.powers.keys()) for i in range(len(supply_centers_history['AUSTRIA']))]
-  supply_centers_history['Total'] = total_supply_centers_history
+  # # Add Total to supply centres history
+  # total_supply_centers_history = [sum(supply_centers_history[power_name][i] for power_name in state.powers.keys()) for i in range(len(supply_centers_history['AUSTRIA']))]
+  # supply_centers_history['Total'] = total_supply_centers_history
 
-  # Add Total to units history
-  total_units_history = [sum(units_history[power_name][i] for power_name in state.powers.keys()) for i in range(len(units_history['AUSTRIA']))]
-  units_history['Total'] = total_units_history
+  # # Add Total to units history
+  # total_units_history = [sum(units_history[power_name][i] for power_name in state.powers.keys()) for i in range(len(units_history['AUSTRIA']))]
+  # units_history['Total'] = total_units_history
 
-  # Add Total to welfare points history
-  total_welfare_points_history = [sum(welfare_points_history[power_name][i] for power_name in state.powers.keys()) for i in range(len(welfare_points_history['AUSTRIA']))]
-  welfare_points_history['Total'] = total_welfare_points_history
+  # # Add Total to welfare points history
+  # total_welfare_points_history = [sum(welfare_points_history[power_name][i] for power_name in state.powers.keys()) for i in range(len(welfare_points_history['AUSTRIA']))]
+  # welfare_points_history['Total'] = total_welfare_points_history
 
-  # Add Nash Social Welfare to welfare points history
-  # nash_social_welfare_history = [nash_social_welfare([welfare_points_history[power_name][i] for power_name in state.powers.keys()]) for i in range(len(welfare_points_history['AUSTRIA']))]
-  # welfare_points_history['Nash Social Welfare'] = nash_social_welfare_history
+  # # Add Nash Social Welfare to welfare points history
+  # # nash_social_welfare_history = [nash_social_welfare([welfare_points_history[power_name][i] for power_name in state.powers.keys()]) for i in range(len(welfare_points_history['AUSTRIA']))]
+  # # welfare_points_history['Nash Social Welfare'] = nash_social_welfare_history
 
-  figures_to_plot = [('Welfare Points', welfare_points_history), ('Supply Centers', supply_centers_history), ('Units', units_history)]
+  # figures_to_plot = [('Welfare Points', welfare_points_history), ('Supply Centers', supply_centers_history), ('Units', units_history)]
 
 
-  for figure_name, figure in figures_to_plot:
-    plt.figure()
-    for power_name, data in figure.items():
-      plt.plot(data, label=power_name)
-    plt.legend()
-    plt.title(figure_name)
-    plt.xlabel("Turn")
-    plt.ylabel(figure_name)
+  # for figure_name, figure in figures_to_plot:
+  #   plt.figure()
+  #   for power_name, data in figure.items():
+  #     plt.plot(data, label=power_name)
+  #   plt.legend()
+  #   plt.title(figure_name)
+  #   plt.xlabel("Turn")
+  #   plt.ylabel(figure_name)
 
-    # Save the figure to the new folder
-    filename = os.path.join(folder_path, f"{figure_name.replace(' ', '_')}_{timestamp_str}.png")
-    plt.savefig(filename)
+  #   # Save the figure to the new folder
+  #   filename = os.path.join(folder_path, f"{figure_name.replace(' ', '_')}_{timestamp_str}.png")
+  #   plt.savefig(filename)
 
-    # plt.show()
+  #   # plt.show()
 
   if returns is None:
     returns = state.returns()
