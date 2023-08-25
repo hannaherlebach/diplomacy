@@ -37,11 +37,8 @@ import jax.numpy as jnp
 import numpy as np
 import tree
 
-from environment import action_utils
-from environment import observation_transformation
+from environment import action_utils, observation_transformation, province_order, tree_utils
 from environment import observation_utils as utils
-from environment import province_order
-from environment import tree_utils
 
 
 def normalize_adjacency(adjacency: np.ndarray) -> np.ndarray:

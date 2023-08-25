@@ -19,9 +19,8 @@ from typing import Optional, Union
 
 import numpy as np
 
-from environment import action_utils
+from environment import action_utils, province_order
 from environment import observation_utils as utils
-from environment import province_order
 
 
 tag_to_id = province_order.province_name_to_id()

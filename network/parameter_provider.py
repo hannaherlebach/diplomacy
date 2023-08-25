@@ -25,8 +25,7 @@ import jax.numpy as jnp
 import numpy as np
 import tree
 
-from environment import action_utils
-from environment import tree_utils
+from environment import action_utils, tree_utils
 
 
 def apply_unbatched(f, *args, **kwargs):

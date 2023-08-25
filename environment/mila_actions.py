@@ -18,10 +18,8 @@ import collections
 from typing import List, Set, Union
 import immutabledict
 
-from environment import action_list
-from environment import action_utils
+from environment import action_list, action_utils, province_order
 from environment import observation_utils as utils
-from environment import province_order
 
 _tag_to_area_id = immutabledict.immutabledict(
     province_order.province_name_to_id(province_order.MapMDF.BICOASTAL_MAP))
@@ -318,3 +316,105 @@ def mila_to_dm_area(mila_string):
   province_tag = _MILA_TO_DM_TAG_MAP.get(mila_string, mila_string)
   area_id = _tag_to_area_id[province_tag]
   return area_id
+
+def possible_orders_by_loc_to_power(possible_orders_by_loc: dict, game):
+  """Takes a dictionary of possible orders by location and returns a dictionary of possible orders by power (in the MILA format).
+  
+  Args:
+    possible_orders_by_loc: a dictionary with locations as keys, and their respective list of possible orders as values. From game.get_all_possible_orders()
+    game: the current game instance.
+    
+  Returns:
+    A dictionary of power: possible orders (in the MILA format).
+  """
+
+  assert possible_orders_by_loc == game.get_all_possible_orders(), "Orders should be the same as game.get_all_possible_orders()"
+
+  # Convert dictionary of orders by location to dictionary of orders by power.
+  powers = game.powers.values()
+  possible_orders_by_power = {power: [] for power in powers}
+
+  if game.phase_type == 'R' and game.dislodged:
+      # In RETREATS phases, only possible moves are by dislodged units.
+      for power in powers:
+          for unit in power.retreats:
+              loc = unit[2:]
+              possible_orders_by_power[power] += possible_orders_by_loc[loc]
+  else:
+      # Add all orders for non-dislodged units on board.
+      for power in powers:
+          for unit in power.units:
+              loc = unit[2:]
+              possible_orders_by_power[power] += possible_orders_by_loc[loc]
+      # In BUILD phases, there can be orders for as-of-yet non-existent units.
+      if game.phase_type == 'A':
+          for power in powers:
+              # Check if power can build.
+              build_count = len(power.units) - len(power.centers)
+              if build_count > 0:
+                # Add build orders for power's unoccupied home locs.
+                for loc in game._build_sites(power):
+                    possible_orders_by_power[power] += possible_orders_by_loc[loc]
+
+  return possible_orders_by_power
+
+def mila_to_dm_possible_orders(possible_orders_by_loc, game):
+  """Takes a dictionary of possible orders by location (in the MILA format) and returns a dictionary of possible orders by power (in the DM format).
+  
+  Args:
+    possible_orders_by_loc: dictionary from game.get_all_possible_orders()
+    game: the current game instance.
+    season: a utils.Season
+    
+  Returns:
+    A dictionary of possible orders by power (in the DM format)."""
+  
+  powers = game.powers.values()
+  season = mila_to_dm_season(game)
+
+  possible_orders_by_power = possible_orders_by_loc_to_power(possible_orders_by_loc, game)
+
+  legal_actions = {power: [] for power in powers}
+  for power, orders in possible_orders_by_power.items():
+      for order in orders:
+          action = mila_action_to_action(order, season)
+          legal_actions[power].append(action)
+
+  # Sort actions and remove duplicates
+  for power in powers:
+      legal_actions[power] = list(set(legal_actions[power]))
+      legal_actions[power].sort()
+  
+  return legal_actions
+
+def mila_to_dm_season(game):
+  """Extracts season information from game.
+  
+  Args:
+    game: the current game instance.
+    
+  Returns:
+    A utils.Season object."""
+  
+  # game.phase: string containing long rep of current phase
+  if 'SPRING' in game.phase: 
+      season = 'SPRING'
+  elif 'FALL' in game.phase:
+      season = 'AUTUMN'
+  elif 'WINTER' in game.phase:
+      # MILA calls 'BUILDS' phase 'WINTER ADJUSTMENT'
+      season = 'BUILDS'
+  else:
+      raise ValueError(f'{game.phase=} does not contain expected season information.')
+
+  # game.phase_type: 'M' for Movement, 'R' for Retreats, 'A' for Adjustment, '-' for non-playing
+  if 'M' in game.phase_type:
+      season = getattr(utils.Season, season + '_MOVES')
+  elif 'R' in game.phase_type:
+      season = getattr(utils.Season, season + '_RETREATS')
+  elif 'A' in game.phase_type:
+      season = getattr(utils.Season, season)
+  else:
+      raise ValueError('Not a valid phase type.')
+  
+  return season

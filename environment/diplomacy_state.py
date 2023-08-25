@@ -344,31 +344,9 @@ class WelfareDiplomacyState(DiplomacyState):
         powers = self.powers
 
         # SEASON
-        
-        # game.phase: string containing long rep of current phase
-        if 'SPRING' in game.phase: 
-            season = 'SPRING'
-        elif 'FALL' in game.phase:
-            season = 'AUTUMN'
-        elif 'WINTER' in game.phase:
-            # MILA calls 'BUILDS' phase 'WINTER ADJUSTMENT'
-            season = 'BUILDS'
-        else:
-            raise ValueError('Not a valid season.')
-
-        # game.phase_type: 'M' for Movement, 'R' for Retreats, 'A' for Adjustment, '-' for non-playing
-        if 'M' in game.phase_type:
-            season = getattr(utils.Season, season + '_MOVES')
-        elif 'R' in game.phase_type:
-            season = getattr(utils.Season, season + '_RETREATS')
-        elif 'A' in game.phase_type:
-            season = getattr(utils.Season, season)
-        else:
-            raise ValueError('Not a valid phase type.')
-        
+        season = mila_actions.mila_to_dm_season(game)
         
         # BOARD STATE & BUILD NUMBERS
- 
         supply_centers = game.map.scs # tags
         supply_centers_owned = set()
 
@@ -539,7 +517,6 @@ class WelfareDiplomacyState(DiplomacyState):
         
         game = self.game
         powers = self.powers
-        self.mila_legal_orders = []
 
         # Get possible orders with welfare set to False
         possible_orders_by_loc = game.get_all_possible_orders()
@@ -574,7 +551,6 @@ class WelfareDiplomacyState(DiplomacyState):
 
         # Store orders by power in MILA format for use in step() method
         orders_by_power_list = [possible_orders_by_power[power] for _, power in sorted(powers.items())]
-        self.mila_legal_orders = orders_by_power_list
         
         season = self.observation().season
 
@@ -594,6 +570,17 @@ class WelfareDiplomacyState(DiplomacyState):
             legal_actions[power_ix].sort()
             
         return legal_actions
+
+        # game = self.game
+        # powers = game.powers.values()
+        # possible_orders_by_loc = game.get_all_possible_orders()
+
+        # # Get dictionary of legal actions by power (DM format)
+        # legal_actions = mila_actions.mila_to_dm_possible_orders(
+        #     possible_orders_by_loc, game
+        # )
+
+        # return [legal_actions[power] for power in powers]
     
     
     def returns(self) -> np.ndarray:
@@ -606,15 +593,26 @@ class WelfareDiplomacyState(DiplomacyState):
         
     
     def step(self, actions_per_player: Sequence[Sequence[int]]) -> None:
-        """Steps the environment forward a full phase of Diplomacy.
+        """Steps the environment forward a full phase of Welfare Diplomacy.
+
+        Note that the actions in actions_per_player do not specify the unit type and coast (except for build actions), whereas the MILA engine requires this information.
+
+        When a DeepMind action can correspond to one of several MILA actions, we select the one which is legal given the current state.
         
         Args:
             actions_per_player: a list of lists of 64-bit integers corresponding to actions."""
         
         game = self.game
-        powers = self.powers
+        powers = game.powers.values()
 
-        # Convert actions to MILA orders; orders will be lists, mostly with one item but some with multiple
+        # Store actions as last actions for next observation
+        self._last_actions = actions_per_player
+        
+        # Get legal actions in MILA format to resolve ambiguous actions
+        possible_orders_by_power = mila_actions.possible_orders_by_loc_to_power(game.get_all_possible_orders(), game)
+        mila_possible_orders = [possible_orders_by_power[power] for power in powers]
+
+        # Convert actions_per_player to MILA orders; orders will be lists, mostly with one item but some with multiple.
         orders = [[mila_actions.action_to_mila_actions(act) if act else [] for act in player] for player in actions_per_player]
         
         orders_reduced = [[],[],[],[],[],[],[],]
@@ -627,7 +625,7 @@ class WelfareDiplomacyState(DiplomacyState):
                     # Get legal one from list of possible actions
                     order_resolved = False
                     for possible_order in order:
-                        if possible_order in self.mila_legal_orders[power_ix]:
+                        if possible_order in mila_possible_orders[power_ix]:
                             orders_reduced[power_ix].append(possible_order)
                             order_resolved = True
                             break
@@ -637,12 +635,12 @@ class WelfareDiplomacyState(DiplomacyState):
                         for possible_order in order:
                             word = possible_order.split()
                             unit = " ".join(word[:2])
-                            if unit in list(powers.values())[power_ix].units:
+                            if unit in list(powers)[power_ix].units:
                                 orders_reduced[power_ix].append(possible_order)
                                 order_resolved = True
                                 break
         
-                    assert order_resolved, 'None of possible orders in legal orders; possible orders are {}'.format(order)
+                    assert order_resolved, 'None of possible orders is legal; possible orders are {}'.format(order)
                 else:
                     # Get string from single-item list
                     orders_reduced[power_ix].append(order[0])
@@ -650,14 +648,11 @@ class WelfareDiplomacyState(DiplomacyState):
         orders = orders_reduced 
 
         # Set orders for each power
-        for power_ix, power_name in enumerate(powers.keys()):
-            game.set_orders(power_name, orders[power_ix], expand=False)
+        for power_ix, power in enumerate(powers):
+            game.set_orders(power.name, orders[power_ix], expand=False)
 
         # Step forward the environment
         game.process()
+
         self.turn_num += 1
-
-        # Store actions for next observation
-        self._last_actions = actions_per_player
-
 
