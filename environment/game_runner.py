@@ -84,6 +84,7 @@ def run_game(
     policies: Sequence[network_policy.Policy],
     slots_to_policies: Sequence[int],
     max_length: Optional[int] = None,
+    max_years: Optional[int] = None,
     min_years_forced_draw=1000,
     forced_draw_probability=0.0,
     points_per_supply_centre=False,
@@ -110,9 +111,6 @@ def run_game(
   """
   num_players = 7
 
-  # # For experiment
-  # focal_players = [i for i, slot in enumerate(slots_to_policies) if slot==1]
-
   if len(slots_to_policies) != num_players:
     raise ValueError(
         f"Length of slot to policy mapping {len(slots_to_policies)}"
@@ -127,8 +125,13 @@ def run_game(
   for policy in policies:
     policy.reset()
 
+  assert max_length is not None or max_years is not None, "Must specify max_length or max_years"
+
   if max_length is None:
     max_length = np.inf
+
+  if max_years is None:
+    max_years = np.inf
 
   year = 0
   turn_num = 0
@@ -143,82 +146,87 @@ def run_game(
   # build_numbers_history = {power_name: [] for power_name in state.powers.keys()}
   # welfare_points_history = {power_name: [] for power_name in state.powers.keys()}
 
-  for turn_num in tqdm(range(max_length)):
-    if not state.is_terminal():
-      #logging.info("In turn %d year %d ", turn_num, year)
-      
-      # For plots
-      # for i, (power_name, power) in enumerate(state.powers.items()):
-      #     supply_centers_history[power_name].append(len(power.centers))
-      #     units_history[power_name].append(len(power.units))
-      #     unbuilt_units_history[power_name].append(len(power.centers)-len(power.units))
-      #     build_numbers_history[power_name].append(state.observation().build_numbers[i])
-      #     welfare_points_history[power_name].append(power.welfare_points)
+  while not state.is_terminal() and turn_num < max_length and year < max_years:
+    #logging.info("In turn %d year %d ", turn_num, year)
+    
+    # For plots
+    # for i, (power_name, power) in enumerate(state.powers.items()):
+    #     supply_centers_history[power_name].append(len(power.centers))
+    #     units_history[power_name].append(len(power.units))
+    #     unbuilt_units_history[power_name].append(len(power.centers)-len(power.units))
+    #     build_numbers_history[power_name].append(state.observation().build_numbers[i])
+    #     welfare_points_history[power_name].append(power.welfare_points)
 
-      # wandb overkill?
-      if wandb.run is not None: 
-        for power_name, power in state.powers.items():
-          log_data = {
-              f'{power_name}/units': len(power.units),
-              f'{power_name}/supply_centers': len(power.centers),
-          }
-          wandb.log(log_data, step=turn_num)
+    # wandb overkill?
+    if wandb.run is not None: 
+      for power_name, power in state.powers.items():
+        log_data = {
+            f'{power_name}/units': len(power.units),
+            f'{power_name}/supply_centers': len(power.centers),
+        }
+        wandb.log(log_data, step=turn_num)
 
-      #print('Focal units', len(state.power.values()[focal_players[0]].units))
-      # print("Welfare points", [power.welfare_points for power in state.powers.values()])
-      # print("Num SCs", [len(power.centers) for power in state.powers.values()])
-      # print("Num units", [len(power.units) for power in state.powers.values()])
+    #print('Focal units', len(state.power.values()[focal_players[0]].units))
+    # print("Welfare points", [power.welfare_points for power in state.powers.values()])
+    # print("Num SCs", [len(power.centers) for power in state.powers.values()])
+    # print("Num units", [len(power.units) for power in state.powers.values()])
 
-      observation = state.observation()
+    observation = state.observation()
 
-      # New Game Year Checks
-      if observation.season == utils.Season.SPRING_MOVES:
-        year += 1
-        if (draw_if_slot_loses is not None and
-            not utils.sc_provinces(draw_if_slot_loses, observation.board)):
-          returns = _draw_returns(points_per_supply_centre, observation.board,
-                                  num_players)
-          logging.info("Forcing a draw due to elimination - returns %s",
-                      returns)
-          break
-        if (year > min_years_forced_draw and
-            np.random.uniform() < forced_draw_probability):
-          returns = _draw_returns(points_per_supply_centre, observation.board,
-                                  num_players)
-          logging.info("Forcing a draw at year %s - returns %s", year, returns)
-          break
+    # New Game Year Checks
+    if observation.season == utils.Season.SPRING_MOVES:
+      if (draw_if_slot_loses is not None and
+          not utils.sc_provinces(draw_if_slot_loses, observation.board)):
+        returns = _draw_returns(points_per_supply_centre, observation.board,
+                                num_players)
+        logging.info("Forcing a draw due to elimination - returns %s",
+                    returns)
+        break
+      if (year > min_years_forced_draw and
+          np.random.uniform() < forced_draw_probability):
+        returns = _draw_returns(points_per_supply_centre, observation.board,
+                                num_players)
+        logging.info("Forcing a draw at year %s - returns %s", year, returns)
+        break
 
-      legal_actions = state.legal_actions()
-      padded_legal_actions = np.zeros(
-          (num_players, action_utils.MAX_LEGAL_ACTIONS), np.int64)
-      for i in range(num_players):
-        padded_legal_actions[i, :len(legal_actions[i])] = legal_actions[i]
-      actions_lists = [[] for _ in range(num_players)]
-      policies_step_outputs = {}
+    legal_actions = state.legal_actions()
+    padded_legal_actions = np.zeros(
+        (num_players, action_utils.MAX_LEGAL_ACTIONS), np.int64)
+    for i in range(num_players):
+      padded_legal_actions[i, :len(legal_actions[i])] = legal_actions[i]
+    actions_lists = [[] for _ in range(num_players)]
+    policies_step_outputs = {}
 
-      for policy, slots_list in zip(policies, policies_to_slots_lists):
-        (policy_actions_lists,
-        policies_step_outputs[str(policy)]) = policy.actions(
-            slots_list, observation, legal_actions)
-        if len(policy_actions_lists) != len(slots_list):
-          raise ValueError(f"Policy {policy} returned {len(policy_actions_lists)}"
-                          f" actions lists for {len(slots_list)} players")
-        for actions, slot in zip(policy_actions_lists, slots_list):
-          actions_lists[slot] = actions
-      # Save our actions lists.
-      padded_actions = np.full(
-          (num_players, action_utils.MAX_ORDERS), -1, np.int64)
-      for i, actions_list in enumerate(actions_lists):
-        if actions_list is not None:
-          padded_actions[i, :len(actions_list)] = actions_list
+    for policy, slots_list in zip(policies, policies_to_slots_lists):
+      (policy_actions_lists,
+      policies_step_outputs[str(policy)]) = policy.actions(
+          slots_list, observation, legal_actions)
+      if len(policy_actions_lists) != len(slots_list):
+        raise ValueError(f"Policy {policy} returned {len(policy_actions_lists)}"
+                        f" actions lists for {len(slots_list)} players")
+      for actions, slot in zip(policy_actions_lists, slots_list):
+        actions_lists[slot] = actions
+    # Save our actions lists.
+    padded_actions = np.full(
+        (num_players, action_utils.MAX_ORDERS), -1, np.int64)
+    for i, actions_list in enumerate(actions_lists):
+      if actions_list is not None:
+        padded_actions[i, :len(actions_list)] = actions_list
 
-      state.step(actions_lists)
-      turn_num += 1
+    state.step(actions_lists)
 
-      traj.append_step(observation,
-                      padded_legal_actions,
-                      padded_actions,
-                      policies_step_outputs)
+    turn_num += 1
+    if observation.season == utils.Season.BUILDS:
+      print("Num units at end of Year ", year, ": ", [len(power.units) for power in state.powers.values()])
+      print("Num supply centres at end of Year ", year, ": ", [len(power.centers) for power in state.powers.values()])
+      logging.info("Num units at end of Year %d: %s", year, [len(power.units) for power in state.powers.values()])
+      logging.info("Num supply centres at end of Year %d: %s", year, [len(power.centers) for power in state.powers.values()])
+      year += 1
+
+    traj.append_step(observation,
+                    padded_legal_actions,
+                    padded_actions,
+                    policies_step_outputs)
       
   if state.is_terminal():
     print('Game terminated after {} turns'.format(turn_num))

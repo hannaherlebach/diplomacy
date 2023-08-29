@@ -15,6 +15,50 @@ welfare_map = Map('standard_welfare')
 adjacency_matrix = province_order.build_adjacency(province_order.get_mdf_content(province_order.MapMDF.BICOASTAL_MAP)) # a num_provinces by num_provinces array of 0s and 1s indicating province adjacency
 
 # Get hard-coded policies
+
+class InstantDisbandPolicy:
+    """Policy which disbands immediately."""
+    def __init__(self):
+        self.turn_num = 0
+        self.disbanded = False
+
+    def reset(self):
+        pass
+
+    def actions(self, slots_list, observation, legal_actions):
+        board = observation.board
+        season = observation.season
+
+        units = board[:, 3:10]
+        dislodgeds = board[:, 16:23]
+
+        actions = [[] for _ in slots_list]
+
+        if not self.disbanded:
+            if season == utils.Season.BUILDS:
+                for i, power_ix in enumerate(slots_list):
+                    units_power = units[:, power_ix]
+                    dislodgeds_power = dislodgeds[:, power_ix]
+                    unit_area_ids = np.where(units_power == 1)[0]
+                    disldoged_area_ids = np.where(dislodgeds_power == 1)[0]
+                    all_area_ids = np.concatenate((unit_area_ids, disldoged_area_ids))
+
+                    for area_id in all_area_ids:
+                        # Construct disband action for unit
+                        province_id, area_ix = utils.province_id_and_area_index(area_id)
+                        coast_flag = 1 if area_ix > 0 else 0
+                        province_tuple = (province_id, coast_flag)
+
+                        disband_action = action_utils.construct_action(8, province_tuple, None, None)
+
+                        # Add disband action to actions with probability p
+                        actions[i].append(disband_action)
+                self.disbanded = True
+            # In all other phases, hold
+        
+        return [actions, {'values': None, 'policy': None, 'actions': None}] #fill out this shit later
+
+
 class RandomDisbandPolicy:
     """Agent which disbands units randomly in BUILD phases, and holds otherwise."""
 
