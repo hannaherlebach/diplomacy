@@ -4,7 +4,6 @@ These policies are modifications on a network policy trained for Standard Diplom
 The algorithm used for the network policy is FPPI-2.
 See https://arxiv.org/abs/2006.04635 for more details."""
 
-
 import os
 import numpy as np
 from functools import partial
@@ -26,18 +25,14 @@ welfare_map = Map('standard_welfare')
 
 from diplomacy.engine.game import Game
 
-# class NoPressPolicy:
-#     def __init__(self):
-#         self.network_policy = get_network_policy_instance()
-#         pass
-#     def reset(self):
-#         pass
-#     def actions(self):
-#         pass
-
-
 class SwitchPolicy:
-    """A policy that switches from the network policy to disbanding policy after a certain number of years."""
+    """A policy that switches from the network policy to disbanding policy after a certain number of years.
+    If year_to_switch = n, then the disbanding policy will start taking effect in the adjustment phase of year n.
+    
+    Args:
+        disband_policy: instance of the chosen disbanding policy
+        year_to_switch: int, year in which to switch to disbanding policy"""
+    
     def __init__(self, disband_policy, year_to_switch=None):
         self.disband = False
         self.disband_policy = disband_policy
@@ -69,10 +64,13 @@ class SwitchPolicy:
         return actions
 
 def get_network_policy_instance(algorithm='FPPI2', file_path='/Users/hannaherlebach/research/diplomacy_parameters/'):
-    """Returns a network policy instance, using SL or FFPI-2 parameters.
+    """Returns a network policy instance.
+     
+    By default all experiments should use the FFPI-2 parameters, but the SL parameters are also available.
     
     Args:
-        algorithm: str in ['SL', 'FFPI2']"""
+        algorithm: str in ['SL', 'FFPI2']
+        file_path: str, path to directory containing the parameters"""
 
     if algorithm=='SL':
         params = 'sl_params.npz'
@@ -102,9 +100,14 @@ policy_map = {
     1: lambda: SwitchPolicy(disband_policies.InstantDisbandPolicy(), year_to_switch=1),
     2: lambda: SwitchPolicy(disband_policies.InstantDisbandPolicy(), year_to_switch=2),
     3: lambda: SwitchPolicy(disband_policies.InstantDisbandPolicy(), year_to_switch=3),
-    10: lambda: SwitchPolicy(disband_policies.SmartDisbandPolicy(), year_to_switch=0),
-    11: lambda: SwitchPolicy(disband_policies.SmartDisbandPolicy(), year_to_switch=1),
-    12: lambda: SwitchPolicy(disband_policies.SmartDisbandPolicy(), year_to_switch=2),
+    10: lambda: SwitchPolicy(disband_policies.RandomDisbandPolicy(p=0.5), year_to_switch=0),
+    11: lambda: SwitchPolicy(disband_policies.RandomDisbandPolicy(p=0.5), year_to_switch=1),
+    12: lambda: SwitchPolicy(disband_policies.RandomDisbandPolicy(p=0.5), year_to_switch=2),
+    13: lambda: SwitchPolicy(disband_policies.RandomDisbandPolicy(p=0.5), year_to_switch=3),
+    20: lambda: SwitchPolicy(disband_policies.SmartDisbandPolicy(num_to_disband=1), year_to_switch=0),
+    21: lambda: SwitchPolicy(disband_policies.SmartDisbandPolicy(num_to_disband=1), year_to_switch=1),
+    22: lambda: SwitchPolicy(disband_policies.SmartDisbandPolicy(num_to_disband=1), year_to_switch=2),
+    23: lambda: SwitchPolicy(disband_policies.SmartDisbandPolicy(num_to_disband=1), year_to_switch=3),
 }
 
 
