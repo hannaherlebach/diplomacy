@@ -14,6 +14,9 @@
 # limitations under the License.
 """Utilities for converting to the action format used by Pacquette et al."""
 
+import sys
+sys.path.append('/Users/hannaherlebach/research/welfare-diplomacy/welfare_diplomacy_baselines/')
+
 import collections
 from typing import List, Set, Union
 import immutabledict
@@ -418,3 +421,33 @@ def mila_to_dm_season(game):
       raise ValueError('Not a valid phase type.')
   
   return season
+
+def resolve_mila_orders(orders: list, game) -> str:
+  """Takes a list of candidate MILA orders for an action and the game state from the MILA environment, and finds the correct order.
+  
+  Args:
+    orders: list of strings, e.g., 'F MAR D'
+    game: the current game instance
+    
+  Returns:
+    A string with the correct order."""
+  
+  legal_orders = game.get_all_possible_orders()
+  order_resolved = False
+
+  units_by_power = [list(set(power.units) | set(power.retreats.keys())) for power in game.powers.values()]
+  units_on_board = [unit for power_units in units_by_power for unit in power_units]
+
+  if len(orders) > 1:
+    for order in orders:
+      word = order.split()
+      loc = word[1]
+      if loc in legal_orders and order in legal_orders[loc]:
+        correct_order = order
+        order_resolved = True
+        break
+    assert order_resolved, "Couldn't find correct order; candidate orders are {}".format(orders)
+  else:
+    correct_order = orders[0]
+
+  return correct_order
