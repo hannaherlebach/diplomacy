@@ -13,7 +13,7 @@ from environment import observation_utils as utils
 from diplomacy.engine.map import Map
 welfare_map = Map('standard_welfare')
 
-adjacency_matrix = province_order.build_adjacency(province_order.get_mdf_content(province_order.MapMDF.BICOASTAL_MAP)) # a num_provinces by num_provinces array of 0s and 1s indicating province adjacency
+adjacency_matrix = province_order.build_adjacency(province_order.get_mdf_content(province_order.MapMDF.STANDARD_MAP)) # a num_provinces by num_provinces array of 0s and 1s indicating province adjacency
 
 
 class InstantDisbandPolicy:
@@ -135,8 +135,10 @@ class SmartDisbandPolicy:
                 to_disband = min(self.num_to_disband, len(sorted_units))
                 units_to_disband = sorted_units[:to_disband]
                 for unit in units_to_disband:
-                    province = utils.province_id_and_area_index(unit)[0]
-                    action = action_utils.construct_action(8, province, None, None)
+                    province_id, area_ix = utils.province_id_and_area_index(unit)
+                    coast_flag = 1 if area_ix > 0 else 0
+                    province_tuple = (province_id, coast_flag)
+                    action = action_utils.construct_action(8, province_tuple, None, None)
                     actions[i].append(action)
         
         # In all other phases, hold
@@ -148,13 +150,13 @@ def get_adjacent_provinces(province: utils.ProvinceID, adjacency: np.array):
     """Returns a list of ProvinceIDs of adjacent provinces for the given province.
     
     Args:
-        province: integer denoting ProvinceID
+        province: integer denoting ProvinceID in [0, 1, ..., 74]
         adjacency: a num_provinces by num_provinces adjacency matrix
         
     Returns:
         A list of ProvinceIDs."""
     
-    adjacent_provinces = np.nonzero(adjacency[province, :])
+    adjacent_provinces = np.nonzero(adjacency[province, :])[0]
     return list(adjacent_provinces)
 
 
@@ -163,8 +165,8 @@ def get_unit_adjacency(province: utils.ProvinceID, unit_owner: int, board: np.ar
     """Returns the number of units in adjacent provinces to the given unit.
     
     Args:
-        province: int in [0,75], the province ID of the unit.
-        unit_owner: int in [0,7], the power index of the unit's owner.
+        province: int in [0, 1, ..., 74], the province ID of the unit.
+        unit_owner: int in [0, 1, ..., 6], the power index of the unit's owner.
         board: the current board state.
         ignore_own: if True, only count enemy units. If False, include own units.
         
@@ -172,7 +174,7 @@ def get_unit_adjacency(province: utils.ProvinceID, unit_owner: int, board: np.ar
         An integer."""
     
     adj_count = 0
-    adj_provinces = get_adjacent_provinces(province)
+    adj_provinces = get_adjacent_provinces(province, adjacency_matrix)
 
     for adj in adj_provinces:
         owner = utils.unit_power(adj, board)
@@ -185,14 +187,16 @@ def sort_units_by_adjacency(power: int, board: np.array, ignore_own=True):
     """Returns a list of the area IDs of all of a power's units, sorted by the number of adjacent units (in ascending order).
     
     Args:
-        power: int in [0,7], the power index of the power whose units are to be sorted.
+        power: int in [0, 1, ... 6], the power index of the power whose units are to be sorted.
         board: the current board state.
         ignore_own: if True, only count enemy units. If False, include own units.
         
     Returns:
-        A list of area IDs."""
+        A list of area IDs (integers in [0, 1, ...80])."""
     
-    unit_areas = set(np.nonzero(board[:, 3 + power]) | set(np.nonzero(board[:, 16 + power])))
+    units = set(np.nonzero(board[:, 3 + power])[0])
+    dislodgeds = set(np.nonzero(board[:, 16 + power])[0])
+    unit_areas = units | dislodgeds
 
     adjacencies = {}
 
@@ -201,5 +205,6 @@ def sort_units_by_adjacency(power: int, board: np.array, ignore_own=True):
         adjacencies[area] = get_unit_adjacency(province, power, board, ignore_own)
 
     sorted_units = [area for area, _ in sorted(adjacencies.items(), key=lambda item: item[1])]
+    # print('power', power, f'{sorted_units=}', f'{adjacencies=}')
     
     return sorted_units

@@ -102,6 +102,9 @@ policy_map = {
     1: lambda: SwitchPolicy(disband_policies.InstantDisbandPolicy(), year_to_switch=1),
     2: lambda: SwitchPolicy(disband_policies.InstantDisbandPolicy(), year_to_switch=2),
     3: lambda: SwitchPolicy(disband_policies.InstantDisbandPolicy(), year_to_switch=3),
+    10: lambda: SwitchPolicy(disband_policies.SmartDisbandPolicy(), year_to_switch=0),
+    11: lambda: SwitchPolicy(disband_policies.SmartDisbandPolicy(), year_to_switch=1),
+    12: lambda: SwitchPolicy(disband_policies.SmartDisbandPolicy(), year_to_switch=2),
 }
 
 
@@ -115,7 +118,7 @@ def main():
         state=initial_state,
         policies=policies,
         slots_to_policies=slots_to_policies,
-        max_years = 2
+        max_years = 3
     )
 
 if __name__ == '__main__':
