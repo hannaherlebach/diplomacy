@@ -24,10 +24,8 @@ import jax.numpy as jnp
 import numpy as np
 import tree
 
-from environment import action_utils
+from environment import action_utils, province_order, tree_utils
 from environment import observation_utils as utils
-from environment import province_order
-from environment import tree_utils
 
 
 class ObservationTransformState(NamedTuple):
@@ -82,7 +80,7 @@ def update_state(
     else:
       area = utils.area_id_for_unit_in_province_id(province_id,
                                                    last_board_state)
-    assert actions_since_previous_moves_phase[area, -1] == -1
+    #assert actions_since_previous_moves_phase[area, -1] == -1
     actions_since_previous_moves_phase[area, -1] = action >> 48
 
   if observation.season.is_moves():

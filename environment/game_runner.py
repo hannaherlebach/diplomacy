@@ -27,7 +27,7 @@ import seaborn as sns
 from datetime import datetime
 
 
-from environment import action_utils, mila_actions
+from environment import action_utils, mila_actions, human_readable_actions
 from environment import observation_utils as utils
 from network import network_policy
 
@@ -217,11 +217,18 @@ def run_game(
 
     turn_num += 1
     if observation.season == utils.Season.BUILDS:
-      print("Num units at end of Year ", year, ": ", [len(power.units) for power in state.powers.values()])
-      print("Num supply centres at end of Year ", year, ": ", [len(power.centers) for power in state.powers.values()])
       logging.info("Num units at end of Year %d: %s", year, [len(power.units) for power in state.powers.values()])
       logging.info("Num supply centres at end of Year %d: %s", year, [len(power.centers) for power in state.powers.values()])
       year += 1
+
+    # For debugging actions
+    readable_actions = [[] for _ in range(num_players)]
+    for i, player in enumerate(actions_lists):
+      for action in player:
+        readable_action =  human_readable_actions.action_string(action, observation.board)
+        readable_actions[i].append(readable_action)
+    
+    print(year, observation.season, readable_actions)
 
     traj.append_step(observation,
                     padded_legal_actions,
