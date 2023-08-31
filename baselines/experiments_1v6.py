@@ -29,6 +29,8 @@ from network import parameter_provider, config, network_policy
 from baselines import disband_policies as dp
 from environment import diplomacy_state, game_runner, action_utils
 from environment import observation_utils as utils
+
+from diplomacy.engine.game import Game
 #%%
 
 def print_payoff_matrix(matrix):
@@ -150,7 +152,7 @@ for i in range(0, max_years, step): # focal
         print(f'Background: switches after {j} years')
 
         # Create a new game instance
-        game_instance = diplomacy_state.WelfareGame()
+        game_instance = Game()
         initial_state = diplomacy_state.WelfareDiplomacyState(game_instance)
 
         # Focal policy
@@ -177,12 +179,11 @@ for i in range(0, max_years, step): # focal
         policies = (background_policy, focal_policy)
         slots_to_policies = [int(i==focal) for i in range(7)]
         
-        trajectory = trajectory = game_runner.run_game(
+        trajectory = game_runner.run_game(
             state = initial_state,
             policies = policies,
             slots_to_policies = slots_to_policies,
-        
-        max_length = None,
+            max_length = None,
             max_years = max_years
             )
         
