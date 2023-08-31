@@ -1,3 +1,4 @@
+"""Hard-coded policies for disbanding units, to be combined with SD network policies to create policies for WD."""
 import os
 import numpy as np
 from functools import partial
@@ -6,7 +7,7 @@ import argparse
 from typing import Any, Sequence, Tuple
 
 from network import config, network_policy, parameter_provider
-from environment import diplomacy_state, game_runner, mila_actions, action_utils, province_order
+from environment import diplomacy_state, game_runner, mila_actions, action_utils, province_order, human_readable_actions
 from environment import observation_utils as utils
 
 from diplomacy.engine.map import Map
@@ -14,7 +15,6 @@ welfare_map = Map('standard_welfare')
 
 adjacency_matrix = province_order.build_adjacency(province_order.get_mdf_content(province_order.MapMDF.BICOASTAL_MAP)) # a num_provinces by num_provinces array of 0s and 1s indicating province adjacency
 
-# Get hard-coded policies
 
 class InstantDisbandPolicy:
     """Policy which disbands immediately."""
@@ -32,7 +32,7 @@ class InstantDisbandPolicy:
         units = board[:, 3:10]
         dislodgeds = board[:, 16:23]
 
-        actions = [[] for _ in slots_list]
+        actions = [set() for _ in slots_list]
 
         if not self.disbanded:
             if season == utils.Season.BUILDS:
@@ -52,9 +52,11 @@ class InstantDisbandPolicy:
                         disband_action = action_utils.construct_action(8, province_tuple, None, None)
 
                         # Add disband action to actions with probability p
-                        actions[i].append(disband_action)
+                        actions[i].add(disband_action)
+
                 self.disbanded = True
             # In all other phases, hold
+        actions = [list(action_set) for action_set in actions]
         
         return [actions, {'values': None, 'policy': None, 'actions': None}] #fill out this shit later
 
@@ -62,7 +64,7 @@ class InstantDisbandPolicy:
 class RandomDisbandPolicy:
     """Agent which disbands units randomly in BUILD phases, and holds otherwise."""
 
-    def __init__(self, p):
+    def __init__(self, p=0.5):
         self.p = p
 
     def reset(self):
@@ -72,10 +74,8 @@ class RandomDisbandPolicy:
         """Produces a list of lists of actions, one for each slot.
         
         Args:
-            slots_list: a list of slots (integers in range(num_players) this policy should produce actions for.)"""
+            slots_list: a list of slots (power indices) this policy should produce actions for."""
         
-        assert len(slots_list) <= self.num_players
-
         board = observation.board
         season = observation.season
 
@@ -116,7 +116,7 @@ class SmartDisbandPolicy:
     Args:
         num_to_disband: Number of units to disband per BUILDS phase."""
 
-    def __init__(self, num_to_disband):
+    def __init__(self, num_to_disband=1):
         self.num_to_disband = num_to_disband
 
     def reset(self):
