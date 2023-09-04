@@ -7,17 +7,25 @@ import argparse
 from typing import Any, Sequence, Tuple
 
 from network import config, network_policy, parameter_provider
-from environment import diplomacy_state, game_runner, mila_actions, action_utils, province_order, human_readable_actions
+from environment import (
+    diplomacy_state,
+    game_runner,
+    mila_actions,
+    action_utils,
+    province_order,
+    human_readable_actions,
+)
 from environment import observation_utils as utils
 
-from diplomacy.engine.map import Map
-welfare_map = Map('standard_welfare')
+# from diplomacy.engine.map import Map
+# welfare_map = Map('standard_welfare')  # Errors on first repo use
 
 adjacency_matrix = province_order.build_adjacency(province_order.get_mdf_content(province_order.MapMDF.STANDARD_MAP)) # a num_provinces by num_provinces array of 0s and 1s indicating province adjacency
 
 
 class InstantDisbandPolicy:
     """Policy which disbands immediately."""
+
     def __init__(self):
         self.turn_num = 0
         self.disbanded = False
@@ -49,7 +57,9 @@ class InstantDisbandPolicy:
                         coast_flag = 1 if area_ix > 0 else 0
                         province_tuple = (province_id, coast_flag)
 
-                        disband_action = action_utils.construct_action(8, province_tuple, None, None)
+                        disband_action = action_utils.construct_action(
+                            8, province_tuple, None, None
+                        )
 
                         # Add disband action to actions with probability p
                         actions[i].add(disband_action)
@@ -57,8 +67,11 @@ class InstantDisbandPolicy:
                 self.disbanded = True
             # In all other phases, hold
         actions = [list(action_set) for action_set in actions]
-        
-        return [actions, {'values': None, 'policy': None, 'actions': None}] #fill out this shit later
+
+        return [
+            actions,
+            {"values": None, "policy": None, "actions": None},
+        ]  # fill out this shit later
 
 
 class RandomDisbandPolicy:
@@ -72,10 +85,11 @@ class RandomDisbandPolicy:
 
     def actions(self, slots_list, observation, legal_actions):
         """Produces a list of lists of actions, one for each slot.
-        
+
         Args:
-            slots_list: a list of slots (power indices) this policy should produce actions for."""
-        
+            slots_list: a list of slots (power indices) this policy should produce actions for.
+        """
+
         board = observation.board
         season = observation.season
 
@@ -98,21 +112,26 @@ class RandomDisbandPolicy:
                     coast_flag = 1 if area_ix > 0 else 0
                     province_tuple = (province_id, coast_flag)
 
-                    disband_action = action_utils.construct_action(8, province_tuple, None, None)
+                    disband_action = action_utils.construct_action(
+                        8, province_tuple, None, None
+                    )
 
                     # Add disband action to actions with probability p
                     if np.random.uniform() < self.p:
                         actions[i].append(disband_action)
 
         # In all other phases, hold
-        
-        return [actions, {'values': None, 'policy': None, 'actions': None}] #fill out this shit later
-    
+
+        return [
+            actions,
+            {"values": None, "policy": None, "actions": None},
+        ]  # fill out this shit later
+
 
 # Unfinished
 class SmartDisbandPolicy:
     """Agent which disbands the units with fewest adjacent (enemy) units first.
-    
+
     Args:
         num_to_disband: Number of units to disband per BUILDS phase."""
 
@@ -123,7 +142,6 @@ class SmartDisbandPolicy:
         pass
 
     def actions(self, slots_list, observation, legal_actions):
-
         board = observation.board
         season = observation.season
 
@@ -140,19 +158,22 @@ class SmartDisbandPolicy:
                     province_tuple = (province_id, coast_flag)
                     action = action_utils.construct_action(8, province_tuple, None, None)
                     actions[i].append(action)
-        
+
         # In all other phases, hold
-        
-        return [actions, {'values': None, 'policy': None, 'actions': None}] #fill out this shit later
+
+        return [
+            actions,
+            {"values": None, "policy": None, "actions": None},
+        ]  # fill out this shit later
 
 
 def get_adjacent_provinces(province: utils.ProvinceID, adjacency: np.array):
     """Returns a list of ProvinceIDs of adjacent provinces for the given province.
-    
+
     Args:
         province: integer denoting ProvinceID in [0, 1, ..., 74]
         adjacency: a num_provinces by num_provinces adjacency matrix
-        
+
     Returns:
         A list of ProvinceIDs."""
     
@@ -160,37 +181,39 @@ def get_adjacent_provinces(province: utils.ProvinceID, adjacency: np.array):
     return list(adjacent_provinces)
 
 
-
-def get_unit_adjacency(province: utils.ProvinceID, unit_owner: int, board: np.array, ignore_own=True):
+def get_unit_adjacency(
+    province: utils.ProvinceID, unit_owner: int, board: np.array, ignore_own=True
+):
     """Returns the number of units in adjacent provinces to the given unit.
-    
+
     Args:
         province: int in [0, 1, ..., 74], the province ID of the unit.
         unit_owner: int in [0, 1, ..., 6], the power index of the unit's owner.
         board: the current board state.
         ignore_own: if True, only count enemy units. If False, include own units.
-        
+
     Returns:
         An integer."""
-    
+
     adj_count = 0
     adj_provinces = get_adjacent_provinces(province, adjacency_matrix)
 
     for adj in adj_provinces:
         owner = utils.unit_power(adj, board)
         if ignore_own and owner != unit_owner or not ignore_own and owner is not None:
-            adj_count +=1
+            adj_count += 1
 
     return adj_count
-    
+
+
 def sort_units_by_adjacency(power: int, board: np.array, ignore_own=True):
     """Returns a list of the area IDs of all of a power's units, sorted by the number of adjacent units (in ascending order).
-    
+
     Args:
         power: int in [0, 1, ... 6], the power index of the power whose units are to be sorted.
         board: the current board state.
         ignore_own: if True, only count enemy units. If False, include own units.
-        
+
     Returns:
         A list of area IDs (integers in [0, 1, ...80])."""
     
