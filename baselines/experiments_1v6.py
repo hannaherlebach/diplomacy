@@ -59,8 +59,10 @@ def nash_social_welfare(payoffs: Sequence[int]):
     return welfare ** (1/len(payoffs))
 
 #%%
+# Make sure files containing parameters are in welfare_diplomacy_baselines/network_parameters
+network_parameter_path = os.path.join(os.path.join(os.path.dirname(__file__), ".."), "network_parameters")
 
-def get_network_policy_instance(algorithm='SL', file_path='/Users/hannaherlebach/research/diplomacy_parameters/'):
+def get_network_policy_instance(algorithm='SL', file_path=network_parameter_path):
     """Returns a network policy instance, using SL or FFPI-2 parameters.
     
     Args:
