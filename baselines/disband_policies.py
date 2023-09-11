@@ -1,10 +1,13 @@
 """Hard-coded policies for disbanding units, to be combined with SD network policies to create policies for WD."""
 import os
+import sys
 import numpy as np
 from functools import partial
 import logging
 import argparse
 from typing import Any, Sequence, Tuple
+
+sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
 from network import config, network_policy, parameter_provider
 from environment import (
@@ -17,11 +20,10 @@ from environment import (
 )
 from environment import observation_utils as utils
 
-# from diplomacy.engine.map import Map
-# welfare_map = Map('standard_welfare')  # Errors on first repo use
+from diplomacy.engine.map import Map 
+from diplomacy.engine.game import Game
 
 adjacency_matrix = province_order.build_adjacency(province_order.get_mdf_content(province_order.MapMDF.STANDARD_MAP)) # a num_provinces by num_provinces array of 0s and 1s indicating province adjacency
-
 
 class InstantDisbandPolicy:
     """Policy which disbands immediately."""
@@ -75,10 +77,23 @@ class InstantDisbandPolicy:
 
 
 class RandomDisbandPolicy:
-    """Agent which disbands units randomly in BUILD phases, and holds otherwise."""
+    """Agent which disbands units randomly in BUILD phases, and holds otherwise.
+    An agent can either disband each unit with some probability, or disband some number of uniformly randomly chosen units. By default, it disbands each unit with probability 0.5. If num_to_disband is provided, then p is ignored.
+    
+    Args:
+        p: probability of disbanding each unit
+        num_to_disband: number of randomly chosen units to disband
+        max_years: the length of the game"""
 
-    def __init__(self, p=0.5):
+    def __init__(self, p=0.5, num_to_disband=None, max_years=10):
         self.p = p
+        if num_to_disband:
+            self.disband_by_number = True
+            self.num_to_disband = num_to_disband
+        else:
+            self.disband_by_number = False
+        self.max_years = max_years
+        self.year = 0
 
     def reset(self):
         pass
@@ -105,20 +120,52 @@ class RandomDisbandPolicy:
                 unit_area_ids = np.where(units_power == 1)[0]
                 disldoged_area_ids = np.where(dislodgeds_power == 1)[0]
                 all_area_ids = np.concatenate((unit_area_ids, disldoged_area_ids))
+                num_units = len(all_area_ids)
+                if num_units > 0:
+                    # Disband all units if final year
+                    if self.year == self.max_years - 1:
+                        for area_id in all_area_ids:
+                            # Construct disband action for unit
+                            province_id, area_ix = utils.province_id_and_area_index(area_id)
+                            coast_flag = 1 if area_ix > 0 else 0
+                            province_tuple = (province_id, coast_flag)
 
-                for area_id in all_area_ids:
-                    # Construct disband action for unit
-                    province_id, area_ix = utils.province_id_and_area_index(area_id)
-                    coast_flag = 1 if area_ix > 0 else 0
-                    province_tuple = (province_id, coast_flag)
+                            disband_action = action_utils.construct_action(
+                                8, province_tuple, None, None
+                            )
 
-                    disband_action = action_utils.construct_action(
-                        8, province_tuple, None, None
-                    )
+                            actions[i].append(disband_action)
+                    # If self.disband_by_number = True, disband self.num_to_disband randomly chosen units
+                    elif self.disband_by_number:
+                        units_to_disband_indices = np.random.choice(num_units, self.num_to_disband, replace=False)
+                        units_to_disband = all_area_ids[units_to_disband_indices]   
+                        print(f'{units_to_disband=}')
+                        for unit in units_to_disband:
+                            # Construct disband action for unit
+                            province_id, area_ix = utils.province_id_and_area_index(unit)
+                            coast_flag = 1 if area_ix > 0 else 0
+                            province_tuple = (province_id, coast_flag)
 
-                    # Add disband action to actions with probability p
-                    if np.random.uniform() < self.p:
-                        actions[i].append(disband_action)
+                            disband_action = action_utils.construct_action(
+                                8, province_tuple, None, None
+                            )
+                            actions[i].append(disband_action)
+                    # Otherwise, disband each unit with probability self.p
+                    else:
+                        for area_id in all_area_ids:
+                            # Construct disband action for unit
+                            province_id, area_ix = utils.province_id_and_area_index(area_id)
+                            coast_flag = 1 if area_ix > 0 else 0
+                            province_tuple = (province_id, coast_flag)
+
+                            disband_action = action_utils.construct_action(
+                                8, province_tuple, None, None
+                            )
+
+                            # Add disband action to actions with probability p
+                            if np.random.uniform() < self.p:
+                                actions[i].append(disband_action)
+            self.year += 1
 
         # In all other phases, hold
 
@@ -135,8 +182,10 @@ class SmartDisbandPolicy:
     Args:
         num_to_disband: Number of units to disband per BUILDS phase."""
 
-    def __init__(self, num_to_disband=1):
+    def __init__(self, num_to_disband=1, max_years=10):
         self.num_to_disband = num_to_disband
+        self.max_years = max_years
+        self.year = 0
 
     def reset(self):
         pass
@@ -151,13 +200,18 @@ class SmartDisbandPolicy:
             for i, power_ix in enumerate(slots_list):
                 sorted_units = sort_units_by_adjacency(power_ix, board)
                 to_disband = min(self.num_to_disband, len(sorted_units))
-                units_to_disband = sorted_units[:to_disband]
+                if self.year < self.max_years - 1:
+                    units_to_disband = sorted_units[:to_disband]
+                else:
+                    # Disband all units if final year
+                    units_to_disband = sorted_units
                 for unit in units_to_disband:
                     province_id, area_ix = utils.province_id_and_area_index(unit)
                     coast_flag = 1 if area_ix > 0 else 0
                     province_tuple = (province_id, coast_flag)
                     action = action_utils.construct_action(8, province_tuple, None, None)
                     actions[i].append(action)
+            self.year += 1
 
         # In all other phases, hold
 
@@ -231,3 +285,19 @@ def sort_units_by_adjacency(power: int, board: np.array, ignore_own=True):
     # print('power', power, f'{sorted_units=}', f'{adjacencies=}')
     
     return sorted_units
+
+def main():
+    # Tests
+    game_instance = Game(map_name="standard_welfare")
+    initial_state = diplomacy_state.WelfareDiplomacyState(game_instance)
+    test_policy = SmartDisbandPolicy(max_years=3)
+    policies = (test_policy,)
+    trajectory = game_runner.run_game(
+        state=initial_state,
+        policies=policies,
+        slots_to_policies=[0]*7,
+        max_years=3
+    )
+
+if __name__ == "__main__":
+    main()
