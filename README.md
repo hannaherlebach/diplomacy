@@ -1,20 +1,85 @@
 # README
 
-This directory contains code to let agents from [Learning to Play No Press
+This repository is a submodule for [Welfare Diplomacy](https://github.com/mukobi/welfare-diplomacy).
+It contains code to let agents adapted from [Learning to Play No Press
 Diplomacy with Best Response Policy Iteration (Anthony et al
-2020)](https://arxiv.org/abs/2006.04635) play Diplomacy.
+2020)](https://arxiv.org/abs/2006.04635) play Welfare Diplomacy.
 
-The code provided here, paired with a Diplomacy environment and adjudicator, can
-be used to evaluate our agents, and generate game trajectories.
+## Getting Started
 
-A Diplomacy environment/adjudicator is required to play games, specifications
-for this module can be found in the protocol in
-`environment/diplomacy_state.py`.
+### Initialisation and Updating the Submodule
 
-This readme describes the observations and action space required, and tests to
-confirm the environment and agent are working correctly.
+If you haven't yet cloned [Welfare Diplomacy](https://github.com/mukobi/welfare-diplomacy), you can clone it along with this submodule by running:
+
+```
+git clone --recurse-submodules https://github.com/mukobi/welfare-diplomacy.git
+```
+
+Otherwise, if you have already cloned the `welfare-diplomacy` repository, navigate to its root directory and run the following commands to initialise and update this submodule:
+
+```
+git submodule init
+git submodule update
+```
+
+### Setting Up the Python Environment
+
+Once you've initialised the submodule, navigate to its directory and set up its Python environment as follows:
+
+#### Option 1: Run the Provided Script
+The script will set up a fresh virtual environment, download the
+appropriate libraries, and then run `tests/network_test.py` (see below).
+
+```
+cd welfare_diplomacy_baselines
+./run.sh
+```
+
+#### Option 2: Manual Setup
+```
+cd ..
+python3 -m venv dip_env
+source dip_env/bin/activate
+pip3 install --upgrade pip
+pip3 install -r welfare_diplomacy_baselines/requirements.txt
+```
+
+or using conda:
+
+```
+cd ..
+conda create -n dip_env
+conda activate dip_env
+pip install --upgrade pip
+pip install -r welfare_diplomacy_baselines/requirements.txt
+```
+
+You can then use the following command to run basic tests and make sure you have all the
+required dependencies. `network_test.py` contains smoke tests that will fail if the network
+does not produce the correct output shape or format, or is unable to perform
+a dummy parameter update.
+
+```
+cd welfare_diplomacy_baselines
+python3 -m tests.network_test
+```
+
+### Downloading Parameters
+
+In order for the agents to run, you must download and correctly save the network parameters.
+
+1. Create a new directory, `welfare_diplomacy_baselines/network_parameters`.
+2. Download the network parameters for the SL and FPPI-2 training schemes (provided below) and save them in `network_parameters`.
+
+| Type | Description | Link |
+|---|---|---|
+| Parameters | Supervised Imitation Learning (SL) | [download](https://storage.googleapis.com/dm-diplomacy/sl_params.npz) |
+| Parameters | Fictitious Play Policy Iteration 2 (FPPI-2) | [download](https://storage.googleapis.com/dm-diplomacy/fppi2_params.npz) |
 
 ## Implementation Details
+
+This section provides additional details on how actions and observations are implemented in the framework of [Learning to Play No Press Diplomacy with Best Response Policy
+Iteration (Anthony et al 2020)](https://arxiv.org/abs/2006.04635).
 
 ### Action Space
 
@@ -130,114 +195,11 @@ For the build_numbers, last_actions, and one-hot flags of unit and supply centre
 owners, the powers are ordered alphabetically: Austria, England, France,
 Germany, Italy, Russia, Turkey.
 
-## Run network test
-
-You can make sure this code runs successfully by using the `run.sh` script
-provided. The script will set up a fresh virtual environment, download the
-appropriate libraries, and then run our `tests/network_test.py` (see below).
-
-You can also do these steps manually using the following commants:
-
-### Setup
-
-To set up a python3 virtual environment with the required dependencies, use the
-following commands, or simply run `run.sh`.
-
-```shell
-cd ..
-python3 -m venv dip_env
-source dip_env/bin/activate
-pip3 install --upgrade pip
-pip3 install -r diplomacy/requirements.txt
-```
-
-### Running a basic smoke test
-
-Use the following command to run basic tests and make sure you have all the
-required dependencies. See the next paragraph for an more detailed explanation
-of the tests we provide.
-
-```shell
-python3 -m diplomacy.tests.network_test
-```
-
-## Tests
-
-We provide two test files:
-
-*   `tests/network_test.py` contains smoke tests that will fail if the network
-    does not produce the correct output shape or format, or is unable to perform
-    a dummy parameter update.
-
-*   `tests/observation_test.py` tests that the network plays Diplomacy as
-    expected given the paremeters we provide, and it checks that the user's
-    Diplomacy environment and adjudicator produce the same observations and
-    trajectories as our internal implementation. See below for the steps to run
-    this test.
-
-### Running observation_test.py
-
-`tests/observation_test.py` contains a template test class. To run this test,
-write a new test class that inherits from `ObservationTest`. The steps to do
-this are:
-
-1.  Create a new test class that inherits from `ObservationTest` (usually in a
-    new file) and add a call to absl.main() in that file.
-2.  Implement the abstract methods of `ObservationTest`. These are
-    `get_parameter_provider`, `get_reference_observations`,
-    `get_reference_legal_actions`, `get_reference_step_outputs`, and
-    `get_actions_outputs`. These methods are to load the network parameters and
-    test data files linked below, suggested implementations are included in the
-    comments on `ObservationTest`
-3.  Add an implementation of the `environment.diplomacy_state.DiplomacyState`
-    abstract class. The implementation will usually be a wrapper around the
-    user's own diplomacy adjudicator, which will convert to match the agent's
-    expected action and observation formats. The sections of this README on
-    Observations and Action Space document the required behaviour of the
-    diplomacy state, and describe several utilities intended to help with the
-    implementation.
-4.  Implement the abstract method `ObservationTest.get_diplomacy_state` with a
-    call to your implementation of a DiplomacyState
-
-If the implementation of the DiplomacyState is incorrect, both test methods
-`test_fixed_play` and `test_network_play` will fail. If the DiplomacyState
-implementation is correct, but the network is not behaving correctly, then only
-`test_network_play` will fail, but `test_fixed_play` will pass.
-
-### Running the trained agents
-
-Once both `ObservationTest` test methods pass, code similar to the first lines
-of the method `test_network_play` can be written to load the trained networks as
-a `network.network_policy.Policy`. The `Policy` has an `actions` method that
-produces actions. In order to behave correctly, the actions method must be
-called every turn of the game, in order, starting from Spring 1901. If phases
-are missed, the agent will not be able to construct the network input correctly,
-as it depends on the observations from several consecutive phases.
-
-## Download parameters and test trajectories.
-
-We provide network parameters for the SL and FPPI-2 training schemes (see
-[Learning to Play No Press Diplomacy with Best Response Policy Iteration
-(Anthony et al 2020)](https://arxiv.org/abs/2006.04635)).
-
-We further provide trajectories generated with the SL parameters and our
-internal Diplomacy environment and adjudicator. This is so that users can verify
-that the network plays Diplomacy as expected, and that their environment and
-adjudicator produce match the behavior of our internal ones using the tests
-described above.
-
-| Type | Description | Link |
-|---|---|---|
-| Parameters | Supervised Imitation Learning (SL) | [download](https://storage.googleapis.com/dm-diplomacy/sl_params.npz) |
-| Parameters | Fictitious Play Policy Iteration 2 (FPPI-2) | [download](https://storage.googleapis.com/dm-diplomacy/fppi2_params.npz) |
-| Trajectory | Observations | [download](https://storage.googleapis.com/dm-diplomacy/observations.npz)|
-| Trajectory | Legal Actions | [download](https://storage.googleapis.com/dm-diplomacy/legal_actions.npz)|
-| Trajectory | Step Outputs | [download](https://storage.googleapis.com/dm-diplomacy/step_outputs.npz)|
-| Trajectory | Action Outputs | [download](https://storage.googleapis.com/dm-diplomacy/actions_outputs.npz)|
-
 ## Citing
 
-Please cite [Learning to Play No Press Diplomacy with Best Response Policy
+Please cite [WD paper tbd].
+
+Please also cite the original work: [Learning to Play No Press Diplomacy with Best Response Policy
 Iteration (Anthony et al 2020)](https://arxiv.org/abs/2006.04635)
 
 ```
@@ -256,4 +218,4 @@ Iteration (Anthony et al 2020)](https://arxiv.org/abs/2006.04635)
 
 ## Disclaimer
 
-This is not an official Google product.
+Our project is independent and is not endorsed by Google or DeepMind.
