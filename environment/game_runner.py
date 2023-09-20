@@ -219,16 +219,17 @@ def run_game(
     if observation.season == utils.Season.BUILDS:
       logging.info("Num units at end of Year %d: %s", year, [len(power.units) for power in state.powers.values()])
       logging.info("Num supply centres at end of Year %d: %s", year, [len(power.centers) for power in state.powers.values()])
+      logging.info("Welfare points at end of Year %d: %s", year, [power.welfare_points for power in state.powers.values()])
       year += 1
 
     # For debugging actions
-    readable_actions = [[] for _ in range(num_players)]
-    for i, player in enumerate(actions_lists):
-      for action in player:
-        readable_action =  human_readable_actions.action_string(action, observation.board)
-        readable_actions[i].append(readable_action)
+    # readable_actions = [[] for _ in range(num_players)]
+    # for i, player in enumerate(actions_lists):
+    #   for action in player:
+    #     readable_action =  human_readable_actions.action_string(action, observation.board)
+    #     readable_actions[i].append(readable_action)
     
-    print(year, observation.season, readable_actions)
+    # print(year, observation.season, readable_actions)
 
     traj.append_step(observation,
                     padded_legal_actions,
