@@ -438,7 +438,7 @@ def mila_to_dm_season(game):
         # MILA calls 'BUILDS' phase 'WINTER ADJUSTMENT'
         season = "BUILDS"
     else:
-        raise ValueError(f"{game.phase=} does not contain expected season information.")
+        raise ValueError(f"{game.phase} does not contain expected season information.")
 
     # game.phase_type: 'M' for Movement, 'R' for Retreats, 'A' for Adjustment, '-' for non-playing
     if "M" in game.phase_type:
